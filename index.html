@@ -64,8 +64,7 @@
                             <th scope="col" class="px-6 py-4">Модель процессора</th>
                             <th scope="col" class="px-6 py-4">Поставщик</th>
                             <th scope="col" class="px-6 py-4 text-center">Статус / Наличие</th>
-                            <th scope="col" class="px-6 py-4 text-right">Цена ($)</th>
-                            <th scope="col" class="px-6 py-4 text-right">Цена (ТГ / ₸)</th>
+                            <th scope="col" class="px-6 py-4 text-right">Цена (Тенге / ₸)</th>
                         </tr>
                     </thead>
                     <tbody id="productsTableBody" class="divide-y divide-gray-200 bg-white">
@@ -163,8 +162,7 @@
                 const pcs = parseInt(product.pcs) || 0;
                 const inStock = pcs > 0;
                 
-                // Округляем USD и KZT до целого значения
-                const roundedUsd = formatAndRoundPrice(product.selling_price_usd);
+                // Округляем KZT до целого значения
                 const roundedKzt = formatAndRoundPrice(product.selling_price_kzt);
                 
                 const tr = document.createElement('tr');
@@ -182,10 +180,7 @@
                             ${inStock ? `В наличии (${pcs} шт.)` : 'Под заказ'}
                         </span>
                     </td>
-                    <td class="px-6 py-4 text-right font-semibold text-gray-900">
-                        ${roundedUsd !== '—' ? roundedUsd + ' $' : '—'}
-                    </td>
-                    <td class="px-6 py-4 text-right font-bold text-blue-600">
+                    <td class="px-6 py-4 text-right font-bold text-blue-600 whitespace-nowrap">
                         ${roundedKzt !== '—' ? roundedKzt + ' ₸' : '—'}
                     </td>
                 `;
