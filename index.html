@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Прайс-лист Процессоров</title>
+    <title>Smart Repair Parts</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
 </head>
@@ -14,9 +14,9 @@
         <div class="max-w-7xl mx-auto px-4 py-5 flex flex-col md:flex-row justify-between items-center gap-4">
             <div>
                 <h1 class="text-xl font-bold tracking-tight flex items-center gap-2">
-                    <i class="fa-solid fa-database text-blue-400"></i> Склад Процессоров
+                    <i class="fa-solid fa-wrench text-blue-400"></i> Smart Repair Parts
                 </h1>
-                <p class="text-xs text-gray-400">Синхронизация цен и наличия с Google Диском</p>
+                <p class="text-xs text-gray-400">Цены и наличие компонентов в реальном времени</p>
             </div>
             <!-- Поиск и фильтры -->
             <div class="flex flex-col sm:flex-row gap-3 w-full md:w-auto">
@@ -29,15 +29,10 @@
         </div>
     </header>
 
-    <!-- Вкладки категорий -->
+    <!-- Вкладки категорий (Создаются динамически из Google Таблицы) -->
     <div class="max-w-7xl mx-auto px-4 mt-6">
-        <div class="flex border-b border-gray-200">
-            <button id="tabAmd" class="py-3 px-6 font-semibold border-b-2 border-blue-600 text-blue-600 focus:outline-none transition-all flex items-center gap-2">
-                <i class="fa-solid fa-microchip"></i> AMD
-            </button>
-            <button id="tabIntel" class="py-3 px-6 font-semibold border-b-2 border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 focus:outline-none transition-all flex items-center gap-2">
-                <i class="fa-solid fa-microchip"></i> Intel
-            </button>
+        <div id="tabsContainer" class="flex border-b border-gray-200 overflow-x-auto whitespace-nowrap gap-1">
+            <!-- Сюда JS добавит вкладки для всех ваших листов (AMD, Intel, HAB, EC и др.) -->
         </div>
     </div>
 
@@ -52,7 +47,7 @@
         <!-- Ошибка загрузки -->
         <div id="errorMessage" class="hidden bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded relative" role="alert">
             <strong class="font-bold">Ошибка подключения!</strong>
-            <span class="block sm:inline"> Не удалось получить данные. Пожалуйста, убедитесь, что ваш скрипт активен и таблица доступна.</span>
+            <span class="block sm:inline"> Не удалось получить данные. Пожалуйста, убедитесь, что развертывание в Apps Script обновлено.</span>
         </div>
 
         <!-- Контейнер для таблицы списком -->
@@ -61,7 +56,7 @@
                 <table class="min-w-full divide-y divide-gray-200 text-left text-sm">
                     <thead class="bg-gray-100 text-xs text-gray-600 uppercase font-semibold">
                         <tr>
-                            <th scope="col" class="px-6 py-4">Модель процессора</th>
+                            <th scope="col" class="px-6 py-4">Наименование детали / Модель</th>
                             <th scope="col" class="px-6 py-4">Поставщик</th>
                             <th scope="col" class="px-6 py-4 text-center">Статус / Наличие</th>
                             <th scope="col" class="px-6 py-4 text-right">Цена (Тенге / ₸)</th>
@@ -81,15 +76,15 @@
     </main>
 
     <footer class="bg-white border-t border-gray-200 mt-12 py-6 text-center text-xs text-gray-400">
-        © 2026 Склад Процессоров. Все права защищены.
+        © 2026 Smart Repair Parts. Все права защищены.
     </footer>
 
     <script>
-        // Интегрированный URL вашего Google Apps Script приложения
+        // Ссылка на ваше веб-приложение
         const GOOGLE_API_URL = "https://script.google.com/macros/s/AKfycbxsHYBoc3J5_CMCkwh_rr915bPfE5VPUb9D9qDcbpHoYi_YlAdnNl-5Lawl3MxfoGU5/exec";
 
-        let allProducts = { amd: [], intel: [] };
-        let currentTab = 'amd';
+        let allProducts = {};
+        let currentTab = '';
 
         const loader = document.getElementById('loader');
         const errorMessage = document.getElementById('errorMessage');
@@ -98,23 +93,21 @@
         const noProducts = document.getElementById('noProducts');
         const searchInput = document.getElementById('searchInput');
         const inStockFilter = document.getElementById('inStockFilter');
-        const tabAmd = document.getElementById('tabAmd');
-        const tabIntel = document.getElementById('tabIntel');
+        const tabsContainer = document.getElementById('tabsContainer');
 
         // Вспомогательная функция для парсинга, округления и форматирования цен
         function formatAndRoundPrice(priceStr) {
             if (priceStr === undefined || priceStr === null || priceStr === '' || priceStr === '0' || priceStr === 0) {
                 return '—';
             }
-            // Удаляем пробелы, заменяем запятую на точку, чтобы JavaScript понял дробь
+            // Удаляем пробелы, заменяем запятую на точку для JS
             let cleaned = priceStr.toString().replace(/\s/g, '').replace(',', '.');
             let num = parseFloat(cleaned);
             
             if (isNaN(num)) {
-                return priceStr; // Возвращаем исходный текст, если это не число
+                return priceStr;
             }
             
-            // Округляем до целого числа и форматируем с разделением тысяч пробелами
             return Math.round(num).toLocaleString('ru-RU');
         }
 
@@ -124,14 +117,49 @@
                 if (!response.ok) throw new Error('Network response error');
                 allProducts = await response.json();
                 
-                loader.classList.add('hidden');
-                tableContainer.classList.remove('hidden');
-                renderProducts();
+                // Получаем список всех листов (ключей в JSON)
+                const sheetNames = Object.keys(allProducts);
+                
+                if (sheetNames.length > 0) {
+                    currentTab = sheetNames[0]; // По умолчанию выбираем первый лист
+                    renderTabs(sheetNames);
+                    loader.classList.add('hidden');
+                    tableContainer.classList.remove('hidden');
+                    renderProducts();
+                } else {
+                    throw new Error('No sheets found');
+                }
             } catch (error) {
                 console.error('Ошибка загрузки данных:', error);
                 loader.classList.add('hidden');
                 errorMessage.classList.remove('hidden');
             }
+        }
+
+        // Динамическая генерация вкладок
+        function renderTabs(sheetNames) {
+            tabsContainer.innerHTML = '';
+            
+            sheetNames.forEach(name => {
+                const button = document.createElement('button');
+                const isActive = name === currentTab;
+                
+                button.className = `py-3 px-5 font-semibold border-b-2 transition-all flex items-center gap-2 focus:outline-none text-sm ${
+                    isActive 
+                    ? 'border-blue-600 text-blue-600 font-bold' 
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`;
+                
+                button.innerHTML = `<i class="fa-solid fa-microchip text-xs"></i> ${name}`;
+                
+                button.addEventListener('click', () => {
+                    currentTab = name;
+                    renderTabs(sheetNames);
+                    renderProducts();
+                });
+                
+                tabsContainer.appendChild(button);
+            });
         }
 
         function renderProducts() {
@@ -161,8 +189,6 @@
             filtered.forEach(product => {
                 const pcs = parseInt(product.pcs) || 0;
                 const inStock = pcs > 0;
-                
-                // Округляем KZT до целого значения
                 const roundedKzt = formatAndRoundPrice(product.selling_price_kzt);
                 
                 const tr = document.createElement('tr');
@@ -187,20 +213,6 @@
                 productsTableBody.appendChild(tr);
             });
         }
-
-        tabAmd.addEventListener('click', () => {
-            currentTab = 'amd';
-            tabAmd.className = "py-3 px-6 font-semibold border-b-2 border-blue-600 text-blue-600 focus:outline-none transition-all flex items-center gap-2";
-            tabIntel.className = "py-3 px-6 font-semibold border-b-2 border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 focus:outline-none transition-all flex items-center gap-2";
-            renderProducts();
-        });
-
-        tabIntel.addEventListener('click', () => {
-            currentTab = 'intel';
-            tabIntel.className = "py-3 px-6 font-semibold border-b-2 border-blue-600 text-blue-600 focus:outline-none transition-all flex items-center gap-2";
-            tabAmd.className = "py-3 px-6 font-semibold border-b-2 border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 focus:outline-none transition-all flex items-center gap-2";
-            renderProducts();
-        });
 
         searchInput.addEventListener('input', renderProducts);
         inStockFilter.addEventListener('change', renderProducts);
