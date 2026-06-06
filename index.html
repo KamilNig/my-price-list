@@ -29,10 +29,10 @@
         </div>
     </header>
 
-    <!-- Вкладки категорий (Создаются динамически из Google Таблицы) -->
+    <!-- Вкладки категорий -->
     <div class="max-w-7xl mx-auto px-4 mt-6">
         <div id="tabsContainer" class="flex border-b border-gray-200 overflow-x-auto whitespace-nowrap gap-1">
-            <!-- Сюда JS добавит вкладки для всех ваших листов (AMD, Intel, HAB, EC и др.) -->
+            <!-- Вкладки генерируются динамически -->
         </div>
     </div>
 
@@ -80,7 +80,6 @@
     </footer>
 
     <script>
-        // Ссылка на ваше веб-приложение
         const GOOGLE_API_URL = "https://script.google.com/macros/s/AKfycbxsHYBoc3J5_CMCkwh_rr915bPfE5VPUb9D9qDcbpHoYi_YlAdnNl-5Lawl3MxfoGU5/exec";
 
         let allProducts = {};
@@ -95,12 +94,11 @@
         const inStockFilter = document.getElementById('inStockFilter');
         const tabsContainer = document.getElementById('tabsContainer');
 
-        // Вспомогательная функция для парсинга, округления и форматирования цен
+        // Округление и форматирование цен
         function formatAndRoundPrice(priceStr) {
             if (priceStr === undefined || priceStr === null || priceStr === '' || priceStr === '0' || priceStr === 0) {
                 return '—';
             }
-            // Удаляем пробелы, заменяем запятую на точку для JS
             let cleaned = priceStr.toString().replace(/\s/g, '').replace(',', '.');
             let num = parseFloat(cleaned);
             
@@ -111,17 +109,27 @@
             return Math.round(num).toLocaleString('ru-RU');
         }
 
+        // Функция определения: является ли строка заголовком группы (оглавлением)
+        function isHeaderRow(product) {
+            const hasName = product.name && product.name.trim() !== "";
+            const hasNoShop = !product.shop || product.shop.trim() === "" || product.shop === "—";
+            const hasNoPrice = !product.selling_price_kzt || product.selling_price_kzt === "0" || product.selling_price_kzt === "" || product.selling_price_kzt === "—";
+            const hasNoCost = !product.cost_price || product.cost_price === "0" || product.cost_price === "";
+            const hasNoPcs = !product.pcs || product.pcs === 0;
+
+            return hasName && hasNoShop && hasNoPrice && hasNoCost && hasNoPcs;
+        }
+
         async function fetchProducts() {
             try {
                 const response = await fetch(GOOGLE_API_URL);
                 if (!response.ok) throw new Error('Network response error');
                 allProducts = await response.json();
                 
-                // Получаем список всех листов (ключей в JSON)
                 const sheetNames = Object.keys(allProducts);
                 
                 if (sheetNames.length > 0) {
-                    currentTab = sheetNames[0]; // По умолчанию выбираем первый лист
+                    currentTab = sheetNames[0];
                     renderTabs(sheetNames);
                     loader.classList.add('hidden');
                     tableContainer.classList.remove('hidden');
@@ -136,7 +144,6 @@
             }
         }
 
-        // Динамическая генерация вкладок
         function renderTabs(sheetNames) {
             tabsContainer.innerHTML = '';
             
@@ -169,14 +176,38 @@
             
             const activeList = allProducts[currentTab] || [];
             
-            const filtered = activeList.filter(item => {
-                if (!item.name) return false;
-                const matchesSearch = item.name.toLowerCase().includes(searchVal);
-                const pcsCount = parseInt(item.pcs) || 0;
-                const matchesStock = !onlyInStock || pcsCount > 0;
-                return matchesSearch && matchesStock;
+            // 1. Помечаем каждую строку (заголовок это или обычный товар)
+            const itemsWithTypes = activeList.map(item => ({
+                ...item,
+                isHeader: isHeaderRow(item)
+            }));
+
+            // 2. Умная фильтрация: собираем только те заголовки, внутри которых есть подходящие товары
+            let filtered = [];
+            let currentHeader = null;
+            let headerHasItems = false;
+
+            itemsWithTypes.forEach(item => {
+                if (item.isHeader) {
+                    currentHeader = item;
+                    headerHasItems = false;
+                } else {
+                    const matchesSearch = item.name.toLowerCase().includes(searchVal);
+                    const pcsCount = parseInt(item.pcs) || 0;
+                    const matchesStock = !onlyInStock || pcsCount > 0;
+
+                    if (matchesSearch && matchesStock) {
+                        // Если у нас был сохранен заголовок группы, и мы нашли первый подходящий товар для него:
+                        if (currentHeader && !headerHasItems) {
+                            filtered.push(currentHeader);
+                            headerHasItems = true;
+                        }
+                        filtered.push(item);
+                    }
+                }
             });
 
+            // Если список пуст
             if (filtered.length === 0) {
                 noProducts.classList.remove('hidden');
                 tableContainer.classList.add('hidden');
@@ -186,30 +217,45 @@
             noProducts.classList.add('hidden');
             tableContainer.classList.remove('hidden');
 
+            // 3. Вывод на экран
             filtered.forEach(product => {
-                const pcs = parseInt(product.pcs) || 0;
-                const inStock = pcs > 0;
-                const roundedKzt = formatAndRoundPrice(product.selling_price_kzt);
-                
                 const tr = document.createElement('tr');
-                tr.className = "hover:bg-gray-50 transition-colors";
                 
-                tr.innerHTML = `
-                    <td class="px-6 py-4 font-medium text-gray-900 whitespace-nowrap">
-                        ${product.name}
-                    </td>
-                    <td class="px-6 py-4 text-gray-500 text-xs">
-                        ${product.shop || '—'}
-                    </td>
-                    <td class="px-6 py-4 text-center">
-                        <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold ${inStock ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}">
-                            ${inStock ? `В наличии (${pcs} шт.)` : 'Под заказ'}
-                        </span>
-                    </td>
-                    <td class="px-6 py-4 text-right font-bold text-blue-600 whitespace-nowrap">
-                        ${roundedKzt !== '—' ? roundedKzt + ' ₸' : '—'}
-                    </td>
-                `;
+                if (product.isHeader) {
+                    // Отрисовка строки-оглавления (выровнена по центру, обведена рамкой)
+                    tr.className = "bg-slate-50/50";
+                    tr.innerHTML = `
+                        <td colspan="4" class="px-6 py-5 text-center select-none">
+                            <div class="inline-block px-8 py-2 rounded-lg border-2 border-blue-500 bg-white text-blue-600 font-bold text-xs uppercase tracking-widest shadow-sm">
+                                ${product.name}
+                            </div>
+                        </td>
+                    `;
+                } else {
+                    // Отрисовка обычного товара
+                    const pcs = parseInt(product.pcs) || 0;
+                    const inStock = pcs > 0;
+                    const roundedKzt = formatAndRoundPrice(product.selling_price_kzt);
+                    
+                    tr.className = "hover:bg-gray-50 transition-colors";
+                    tr.innerHTML = `
+                        <td class="px-6 py-4 font-medium text-gray-900 whitespace-nowrap">
+                            ${product.name}
+                        </td>
+                        <td class="px-6 py-4 text-gray-500 text-xs">
+                            ${product.shop || '—'}
+                        </td>
+                        <td class="px-6 py-4 text-center">
+                            <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold ${inStock ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}">
+                                ${inStock ? `В наличии (${pcs} шт.)` : 'Под заказ'}
+                            </span>
+                        </td>
+                        <td class="px-6 py-4 text-right font-bold text-blue-600 whitespace-nowrap">
+                            ${roundedKzt !== '—' ? roundedKzt + ' ₸' : '—'}
+                        </td>
+                    `;
+                }
+                
                 productsTableBody.appendChild(tr);
             });
         }
