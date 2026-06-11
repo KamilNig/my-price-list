@@ -6,43 +6,53 @@
     <title>Smart Repair Parts</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        /* Скрытие полосы прокрутки у вкладок на мобильных (сохраняя скролл жестом) */
+        #tabsContainer::-webkit-scrollbar {
+            display: none;
+        }
+        #tabsContainer {
+            -ms-overflow-style: none;  /* IE и Edge */
+            scrollbar-width: none;  /* Firefox */
+        }
+    </style>
 </head>
 <body class="bg-gray-50 text-gray-800 min-h-screen">
 
     <!-- Хедер -->
     <header class="bg-slate-900 text-white shadow-md">
-        <div class="max-w-7xl mx-auto px-4 py-5 flex flex-col md:flex-row justify-between items-center gap-4">
+        <div class="max-w-7xl mx-auto px-4 py-4 flex flex-col md:flex-row justify-between items-stretch md:items-center gap-4">
             <div>
-                <h1 class="text-xl font-bold tracking-tight flex items-center gap-2">
+                <h1 class="text-xl font-bold tracking-tight flex items-center gap-2 justify-center md:justify-start">
                     <i class="fa-solid fa-wrench text-blue-400"></i> Smart Repair Parts
                 </h1>
-                <p class="text-xs text-gray-400">Цены и наличие компонентов в реальном времени</p>
+                <p class="text-xs text-gray-400 text-center md:text-left mt-0.5">Цены и наличие компонентов в реальном времени</p>
             </div>
             <!-- Поиск и фильтры -->
             <div class="flex flex-col sm:flex-row gap-3 w-full md:w-auto">
-                <input type="text" id="searchInput" placeholder="Поиск по названию..." class="px-4 py-2 rounded bg-slate-800 border border-slate-700 text-white focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm w-full sm:w-64">
-                <label class="flex items-center gap-2 text-sm text-gray-300 cursor-pointer whitespace-nowrap">
-                    <input type="checkbox" id="inStockFilter" class="rounded text-blue-500 focus:ring-blue-500 h-4 w-4">
+                <input type="text" id="searchInput" placeholder="Поиск по названию..." class="px-4 py-2.5 rounded bg-slate-800 border border-slate-700 text-white focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm w-full sm:w-64">
+                <label class="flex items-center justify-center gap-2 text-sm text-gray-300 cursor-pointer whitespace-nowrap bg-slate-800 md:bg-transparent py-2 px-4 rounded md:py-0 md:px-0 border border-slate-700 md:border-transparent">
+                    <input type="checkbox" id="inStockFilter" class="rounded text-blue-500 focus:ring-blue-500 h-4.5 w-4.5 md:h-4 md:w-4">
                     <span>Только в наличии</span>
                 </label>
             </div>
         </div>
     </header>
 
-    <!-- Вкладки категорий -->
-    <div class="max-w-7xl mx-auto px-4 mt-6">
-        <div id="tabsContainer" class="flex border-b border-gray-200 overflow-x-auto whitespace-nowrap gap-1">
+    <!-- Вкладки категорий (свайпаются пальцем на мобильном) -->
+    <div class="max-w-7xl mx-auto px-4 mt-4 md:mt-6">
+        <div id="tabsContainer" class="flex border-b border-gray-200 overflow-x-auto whitespace-nowrap gap-1 pb-1">
             <!-- Вкладки генерируются динамически -->
         </div>
     </div>
 
-    <!-- Информационная панель мульти-поиска (показывается, если результаты есть в разных разделах) -->
+    <!-- Информационная панель мульти-поиска (адаптивная под пальцы) -->
     <div id="searchSummaryContainer" class="max-w-7xl mx-auto px-4 mt-4 hidden">
         <!-- Кнопки выбора разделов генерируются здесь -->
     </div>
 
     <!-- Основная секция -->
-    <main class="max-w-7xl mx-auto px-4 py-6">
+    <main class="max-w-7xl mx-auto px-4 py-4 md:py-6">
         <!-- Индикатор загрузки -->
         <div id="loader" class="flex flex-col items-center justify-center py-20">
             <div class="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600 mb-4"></div>
@@ -55,9 +65,11 @@
             <span class="block sm:inline"> Не удалось получить данные. Пожалуйста, убедитесь, что развертывание в Apps Script обновлено.</span>
         </div>
 
-        <!-- Контейнер для таблицы списком -->
-        <div id="tableContainer" class="hidden bg-white rounded-lg shadow overflow-hidden border border-gray-200">
-            <div class="overflow-x-auto">
+        <!-- Контейнеры отображения товаров -->
+        <div id="tableContainer" class="hidden">
+            
+            <!-- ВЕРСИЯ ДЛЯ ДЕСКТОПОВ (Таблица, скрыта на мобильных) -->
+            <div class="hidden md:block bg-white rounded-lg shadow overflow-hidden border border-gray-200">
                 <table class="min-w-full divide-y divide-gray-200 text-left text-sm">
                     <thead class="bg-gray-100 text-xs text-gray-600 uppercase font-semibold">
                         <tr>
@@ -68,10 +80,16 @@
                         </tr>
                     </thead>
                     <tbody id="productsTableBody" class="divide-y divide-gray-200 bg-white">
-                        <!-- Данные подгружаются через JavaScript -->
+                        <!-- Данные табличной верстки -->
                     </tbody>
                 </table>
             </div>
+
+            <!-- ВЕРСИЯ ДЛЯ МОБИЛЬНЫХ (Карточки, скрыты на десктопах) -->
+            <div id="mobileCardsContainer" class="block md:hidden space-y-3">
+                <!-- Данные карточной верстки -->
+            </div>
+
         </div>
 
         <!-- Ничего не найдено -->
@@ -94,6 +112,7 @@
         const errorMessage = document.getElementById('errorMessage');
         const tableContainer = document.getElementById('tableContainer');
         const productsTableBody = document.getElementById('productsTableBody');
+        const mobileCardsContainer = document.getElementById('mobileCardsContainer');
         const noProducts = document.getElementById('noProducts');
         const searchInput = document.getElementById('searchInput');
         const inStockFilter = document.getElementById('inStockFilter');
@@ -115,7 +134,7 @@
             return Math.round(num).toLocaleString('ru-RU');
         }
 
-        // Определение, является ли строка заголовком группы
+        // Определение строки-оглавления
         function isHeaderRow(product) {
             const hasName = product.name && product.name.trim() !== "";
             const hasNoShop = !product.shop || product.shop.trim() === "" || product.shop === "—";
@@ -139,7 +158,7 @@
                     renderTabs(sheetNames);
                     loader.classList.add('hidden');
                     tableContainer.classList.remove('hidden');
-                    executeSearch(); // Вызываем сквозной поиск при первой загрузке
+                    executeSearch();
                 } else {
                     throw new Error('No sheets found');
                 }
@@ -168,14 +187,13 @@
                 button.addEventListener('click', () => {
                     currentTab = name;
                     renderTabs(sheetNames);
-                    executeSearch(); // При ручном клике на вкладку сохраняем параметры поиска
+                    executeSearch();
                 });
                 
                 tabsContainer.appendChild(button);
             });
         }
 
-        // Глобальная функция для переключения вкладки из панели результатов поиска
         window.switchTabFromSearch = function(sheetName) {
             currentTab = sheetName;
             const sheetNames = Object.keys(allProducts);
@@ -183,7 +201,6 @@
             executeSearch();
         };
 
-        // Логика сквозного поиска и управления вкладками
         function executeSearch() {
             const searchVal = searchInput.value.toLowerCase().trim();
             const onlyInStock = inStockFilter.checked;
@@ -191,7 +208,6 @@
 
             if (sheetNames.length === 0) return;
 
-            // Если поисковая строка пуста — сбрасываем панель мульти-поиска
             if (searchVal === '') {
                 searchSummaryContainer.classList.add('hidden');
                 renderProducts();
@@ -201,7 +217,6 @@
             let matchesBySheet = {};
             let sheetsWithMatches = [];
 
-            // Проверяем совпадения на каждом листе (не учитывая строки заголовков групп)
             sheetNames.forEach(sheet => {
                 const list = allProducts[sheet] || [];
                 const count = list.filter(item => {
@@ -218,33 +233,26 @@
                 }
             });
 
-            // Сценарий 1: Совпадение найдено ровно на ОДНОМ листе
             if (sheetsWithMatches.length === 1) {
                 const singleMatchSheet = sheetsWithMatches[0];
                 if (currentTab !== singleMatchSheet) {
                     currentTab = singleMatchSheet;
-                    renderTabs(sheetNames); // Перерисовываем вкладки с новым активным разделом
+                    renderTabs(sheetNames);
                 }
                 searchSummaryContainer.classList.add('hidden');
-            } 
-            // Сценарий 2: Совпадения найдены на НЕСКОЛЬКИХ листах
-            else if (sheetsWithMatches.length > 1) {
-                // Если на текущем активном листе совпадений нет, автоматически переключаем на первый лист, где они есть
+            } else if (sheetsWithMatches.length > 1) {
                 if (!sheetsWithMatches.includes(currentTab)) {
                     currentTab = sheetsWithMatches[0];
                     renderTabs(sheetNames);
                 }
                 renderSearchSummary(sheetsWithMatches, matchesBySheet);
-            } 
-            // Сценарий 3: Совпадений нет нигде
-            else {
+            } else {
                 searchSummaryContainer.classList.add('hidden');
             }
 
             renderProducts();
         }
 
-        // Рендеринг интерактивной панели мульти-поиска
         function renderSearchSummary(sheetsWithMatches, matchesBySheet) {
             searchSummaryContainer.classList.remove('hidden');
             
@@ -252,9 +260,9 @@
             sheetsWithMatches.forEach(sheet => {
                 const isActive = sheet === currentTab;
                 buttonsHtml += `
-                    <button onclick="switchTabFromSearch('${sheet}')" class="px-3.5 py-1.5 rounded-md text-xs font-semibold transition-all ${
+                    <button onclick="switchTabFromSearch('${sheet}')" class="px-4 py-2 rounded-md text-xs font-semibold transition-all shadow-sm ${
                         isActive 
-                        ? 'bg-blue-600 text-white shadow-sm ring-2 ring-blue-300' 
+                        ? 'bg-blue-600 text-white ring-2 ring-blue-300' 
                         : 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-300'
                     }">
                         ${sheet} (${matchesBySheet[sheet]} шт.)
@@ -266,7 +274,7 @@
                 <div class="bg-blue-50 border border-blue-200 rounded-lg p-4 flex flex-col md:flex-row items-start md:items-center justify-between gap-3 text-sm shadow-sm">
                     <div class="flex items-center gap-2 text-blue-800 font-medium">
                         <i class="fa-solid fa-circle-info text-blue-500"></i>
-                        <span>Результаты найдены в нескольких разделах. Выберите нужный:</span>
+                        <span>Результаты найдены в нескольких разделах:</span>
                     </div>
                     <div class="flex flex-wrap gap-2 w-full md:w-auto">
                         ${buttonsHtml}
@@ -277,6 +285,8 @@
 
         function renderProducts() {
             productsTableBody.innerHTML = '';
+            mobileCardsContainer.innerHTML = ''; // Очищаем мобильный контейнер
+            
             const searchVal = searchInput.value.toLowerCase().trim();
             const onlyInStock = inStockFilter.checked;
             
@@ -320,8 +330,12 @@
             tableContainer.classList.remove('hidden');
 
             filtered.forEach(product => {
+                const pcs = parseInt(product.pcs) || 0;
+                const inStock = pcs > 0;
+                const roundedKzt = formatAndRoundPrice(product.selling_price_kzt);
+
+                // --- 1. ЗАПОЛНЕНИЕ ДЛЯ ДЕСКТРОПНОЙ ТАБЛИЦЫ ---
                 const tr = document.createElement('tr');
-                
                 if (product.isHeader) {
                     tr.className = "bg-slate-50/50";
                     tr.innerHTML = `
@@ -332,10 +346,6 @@
                         </td>
                     `;
                 } else {
-                    const pcs = parseInt(product.pcs) || 0;
-                    const inStock = pcs > 0;
-                    const roundedKzt = formatAndRoundPrice(product.selling_price_kzt);
-                    
                     tr.className = "hover:bg-gray-50 transition-colors";
                     tr.innerHTML = `
                         <td class="px-6 py-4 font-medium text-gray-900 whitespace-nowrap">
@@ -354,12 +364,36 @@
                         </td>
                     `;
                 }
-                
                 productsTableBody.appendChild(tr);
+
+                // --- 2. ЗАПОЛНЕНИЕ ДЛЯ МОБИЛЬНЫХ КАРТОЧЕК ---
+                const card = document.createElement('div');
+                if (product.isHeader) {
+                    card.className = "py-2 text-center";
+                    card.innerHTML = `
+                        <div class="inline-block px-6 py-2 rounded-lg border-2 border-blue-500 bg-white text-blue-600 font-bold text-xs uppercase tracking-widest shadow-sm">
+                            ${product.name}
+                        </div>
+                    `;
+                } else {
+                    card.className = "bg-white rounded-lg p-4 border border-gray-200 shadow-sm flex flex-col gap-3";
+                    card.innerHTML = `
+                        <div class="flex justify-between items-start gap-2">
+                            <div class="font-bold text-gray-900 text-sm break-words flex-1">${product.name}</div>
+                            <div class="text-right font-extrabold text-blue-600 text-base whitespace-nowrap">${roundedKzt !== '—' ? roundedKzt + ' ₸' : '—'}</div>
+                        </div>
+                        <div class="flex justify-between items-center text-xs text-gray-500 pt-2.5 border-t border-gray-100">
+                            <span class="font-mono bg-gray-50 px-2 py-0.5 rounded border border-gray-100">${product.shop || '—'}</span>
+                            <span class="inline-flex items-center px-2 py-0.5 rounded-full font-semibold ${inStock ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}">
+                                ${inStock ? `В наличии (${pcs} шт.)` : 'Под заказ'}
+                            </span>
+                        </div>
+                    `;
+                }
+                mobileCardsContainer.appendChild(card);
             });
         }
 
-        // Подключаем функцию сквозного поиска к вводу текста и фильтрам
         searchInput.addEventListener('input', executeSearch);
         inStockFilter.addEventListener('change', executeSearch);
 
