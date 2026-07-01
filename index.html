@@ -37,6 +37,9 @@
         /* Цены — табличные цифры, чтобы выравнивались по разрядам */
         .price { font-variant-numeric: tabular-nums; }
 
+        /* Пометка «NEW» — красная, чтобы бросалась в глаза */
+        .tag-new { color: #dc2626; font-weight: 800; letter-spacing: .02em; }
+
         /* --- Фотографии деталей (миниатюры + просмотр) --- */
         .photo-strip { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
         .photo-thumb {
@@ -263,6 +266,11 @@
             } catch {
                 return safe;
             }
+        }
+
+        // Подсветка слова NEW красным (только как отдельное слово, регистр не важен)
+        function highlightNew(html) {
+            return html.replace(/\bNEW\b/gi, '<span class="tag-new">$&</span>');
         }
 
         // Округление и форматирование цен
@@ -607,19 +615,19 @@
                 const pcs = parseInt(product.pcs) || 0;
                 const roundedKzt = formatAndRoundPrice(product.selling_price_kzt);
                 const priceHtml = roundedKzt !== '—' ? `${roundedKzt}&nbsp;₸` : '—';
-                const nameHtml = highlightMatch(product.name, searchVal);
+                const nameHtml = highlightNew(highlightMatch(product.name, searchVal));
                 const shopHtml = product.shop ? highlightMatch(product.shop, searchVal) : '—';
                 const photos = product.isHeader ? [] : getPhotos(product);
 
                 // --- 1. Десктопная таблица ---
                 const tr = document.createElement('tr');
                 if (product.isHeader) {
-                    tr.className = "bg-slate-50";
+                    tr.className = "";
                     tr.innerHTML = `
-                        <td colspan="4" class="px-6 py-3 select-none">
-                            <div class="flex items-center gap-3 text-slate-500">
-                                <span class="font-bold text-xs uppercase tracking-widest whitespace-nowrap">${escapeHtml(product.name)}</span>
-                                <span class="flex-1 border-t border-slate-200"></span>
+                        <td colspan="4" class="p-0 select-none">
+                            <div class="flex items-center gap-2.5 px-6 py-2.5 bg-indigo-600 text-white">
+                                <i class="fa-solid fa-layer-group text-indigo-200 text-sm"></i>
+                                <span class="font-bold text-xs md:text-sm uppercase tracking-widest">${escapeHtml(product.name)}</span>
                             </div>
                         </td>
                     `;
@@ -640,10 +648,12 @@
                 // --- 2. Мобильные карточки ---
                 const card = document.createElement('div');
                 if (product.isHeader) {
-                    card.className = "pt-3 pb-1 px-1 flex items-center gap-3 text-slate-500 select-none";
+                    card.className = "select-none mt-2";
                     card.innerHTML = `
-                        <span class="font-bold text-xs uppercase tracking-widest">${escapeHtml(product.name)}</span>
-                        <span class="flex-1 border-t border-slate-200"></span>
+                        <div class="flex items-center gap-2.5 px-4 py-2.5 rounded-lg bg-indigo-600 text-white shadow-sm">
+                            <i class="fa-solid fa-layer-group text-indigo-200 text-sm"></i>
+                            <span class="font-bold text-xs uppercase tracking-widest">${escapeHtml(product.name)}</span>
+                        </div>
                     `;
                 } else {
                     card.className = "bg-white rounded-xl p-4 border border-gray-200 shadow-sm flex flex-col gap-3";
