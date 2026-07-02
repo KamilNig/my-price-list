@@ -40,6 +40,10 @@
         /* Пометка «NEW» — красная, чтобы бросалась в глаза */
         .tag-new { color: #dc2626; font-weight: 800; letter-spacing: .02em; }
 
+        /* Сворачиваемые заголовки-группы: поворот стрелки */
+        .grp-chevron { transition: transform .2s ease; }
+        .grp-header.grp-collapsed .grp-chevron { transform: rotate(-90deg); }
+
         /* --- Фотографии деталей (миниатюры + просмотр) --- */
         .photo-strip { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
         .photo-thumb {
@@ -154,9 +158,15 @@
         <div id="tableContainer" class="hidden">
 
             <!-- Строка статуса: счётчик и время обновления -->
-            <div class="flex items-center justify-between text-xs text-gray-500 mb-3 px-1">
-                <span id="resultsCounter"></span>
-                <span id="lastUpdated"></span>
+            <div class="flex items-center justify-between text-xs text-gray-500 mb-3 px-1 gap-3">
+                <div class="flex items-center gap-3 min-w-0">
+                    <span id="resultsCounter"></span>
+                    <button id="toggleAllBtn" type="button"
+                        class="hidden items-center gap-1.5 bg-indigo-50 border border-indigo-200 text-indigo-700 hover:bg-indigo-100 font-semibold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 rounded-md px-2.5 py-1">
+                        <i class="fa-solid fa-angles-down text-[10px]"></i><span id="toggleAllLabel">Развернуть всё</span>
+                    </button>
+                </div>
+                <span id="lastUpdated" class="shrink-0"></span>
             </div>
 
             <!-- ВЕРСИЯ ДЛЯ ДЕСКТОПОВ (Таблица, скрыта на мобильных) -->
@@ -232,6 +242,8 @@
         let allProducts = {};
         let currentTab = '';
         let lastFetchTime = null;
+        let expandedGroups = new Set();    // id развёрнутых групп (по умолчанию все секции свёрнуты)
+        let currentVisibleGroups = [];     // id видимых групп текущего листа
 
         const loader = document.getElementById('loader');
         const errorMessage = document.getElementById('errorMessage');
@@ -560,47 +572,90 @@
             photoGroups = [];
 
             const searchVal = searchInput.value.toLowerCase().trim();
+            const searchActive = searchVal !== '';
             const onlyInStock = inStockFilter.checked;
             const activeList = allProducts[currentTab] || [];
 
-            const itemsWithTypes = activeList.map(item => ({
-                ...item,
-                isHeader: isHeaderRow(item)
-            }));
+            const passes = (item) => {
+                const matchesSearch = !searchActive || matchesQuery(item, searchVal);
+                const pcsCount = parseInt(item.pcs) || 0;
+                const matchesStock = !onlyInStock || pcsCount > 0;
+                return matchesSearch && matchesStock;
+            };
 
-            const filtered = [];
-            let currentHeader = null;
-            let headerHasItems = false;
-            let itemCount = 0;
-
-            itemsWithTypes.forEach(item => {
-                if (item.isHeader) {
-                    currentHeader = item;
-                    headerHasItems = false;
+            // Группируем строки листа: заголовок + идущие под ним позиции
+            const blocks = [];
+            let cur = null;
+            activeList.forEach((raw, idx) => {
+                if (isHeaderRow(raw)) {
+                    cur = { type: 'group', header: { ...raw, isHeader: true }, id: `${currentTab}#${idx}`, items: [] };
+                    blocks.push(cur);
                 } else {
-                    const matchesSearch = searchVal === '' || matchesQuery(item, searchVal);
-                    const pcsCount = parseInt(item.pcs) || 0;
-                    const matchesStock = !onlyInStock || pcsCount > 0;
-
-                    if (matchesSearch && matchesStock) {
-                        if (currentHeader && !headerHasItems) {
-                            filtered.push(currentHeader);
-                            headerHasItems = true;
+                    const item = { ...raw, isHeader: false };
+                    if (cur) {
+                        cur.items.push(item);
+                    } else {
+                        if (!blocks.length || blocks[blocks.length - 1].type !== 'loose') {
+                            blocks.push({ type: 'loose', items: [] });
                         }
-                        filtered.push(item);
-                        itemCount++;
+                        blocks[blocks.length - 1].items.push(item);
                     }
                 }
             });
 
+            // Применяем поиск/фильтр и учитываем свёрнутые группы
+            const filtered = [];
+            const visibleGroupIds = [];
+            let itemCount = 0;
+
+            blocks.forEach(block => {
+                if (block.type === 'loose') {
+                    block.items.forEach(it => { if (passes(it)) { filtered.push(it); itemCount++; } });
+                    return;
+                }
+                const visible = block.items.filter(passes);
+                itemCount += visible.length;
+                if (visible.length === 0) return; // заголовок без подходящих позиций не показываем
+
+                visibleGroupIds.push(block.id);
+                const collapsed = !searchActive && !expandedGroups.has(block.id);
+                filtered.push({
+                    ...block.header,
+                    groupId: block.id,
+                    childCount: visible.length,
+                    collapsed: collapsed,
+                    collapsible: !searchActive
+                });
+                if (!collapsed) visible.forEach(it => filtered.push(it));
+            });
+
+            currentVisibleGroups = visibleGroupIds;
+
+            const toggleAllBtn = document.getElementById('toggleAllBtn');
+            const toggleAllLabel = document.getElementById('toggleAllLabel');
+
             if (filtered.length === 0) {
                 noProducts.classList.remove('hidden');
                 tableContainer.classList.add('hidden');
+                toggleAllBtn.classList.add('hidden');
+                toggleAllBtn.classList.remove('inline-flex');
                 return;
             }
 
             noProducts.classList.add('hidden');
             tableContainer.classList.remove('hidden');
+
+            // Кнопка «Свернуть всё / Развернуть всё» — только вне поиска и при наличии групп
+            if (!searchActive && visibleGroupIds.length > 0) {
+                const allExpanded = visibleGroupIds.every(id => expandedGroups.has(id));
+                toggleAllBtn.classList.remove('hidden');
+                toggleAllBtn.classList.add('inline-flex');
+                toggleAllLabel.textContent = allExpanded ? 'Свернуть всё' : 'Развернуть всё';
+                toggleAllBtn.querySelector('i').className = `fa-solid ${allExpanded ? 'fa-angles-up' : 'fa-angles-down'} text-[10px]`;
+            } else {
+                toggleAllBtn.classList.add('hidden');
+                toggleAllBtn.classList.remove('inline-flex');
+            }
 
             // Счётчик и время обновления
             resultsCounter.textContent = `Позиций: ${itemCount}`;
@@ -622,13 +677,19 @@
                 // --- 1. Десктопная таблица ---
                 const tr = document.createElement('tr');
                 if (product.isHeader) {
+                    const interactive = product.collapsible;
                     tr.className = "";
                     tr.innerHTML = `
                         <td colspan="4" class="p-0 select-none">
-                            <div class="flex items-center gap-2.5 px-6 py-2.5 bg-indigo-600 text-white">
+                            <button type="button" ${interactive ? `data-toggle-group="${escapeHtml(product.groupId)}"` : 'tabindex="-1"'} aria-expanded="${!product.collapsed}"
+                                class="grp-header ${product.collapsed ? 'grp-collapsed' : ''} w-full flex items-center gap-2.5 px-6 py-2.5 bg-indigo-600 ${interactive ? 'hover:bg-indigo-700 cursor-pointer' : 'cursor-default'} text-white text-left transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-white/70">
                                 <i class="fa-solid fa-layer-group text-indigo-200 text-sm"></i>
                                 <span class="font-bold text-xs md:text-sm uppercase tracking-widest">${escapeHtml(product.name)}</span>
-                            </div>
+                                <span class="ml-auto flex items-center gap-3 shrink-0">
+                                    <span class="text-[11px] font-semibold bg-white/15 px-2 py-0.5 rounded-full">${product.childCount}</span>
+                                    ${interactive ? '<i class="fa-solid fa-chevron-down grp-chevron text-xs"></i>' : ''}
+                                </span>
+                            </button>
                         </td>
                     `;
                 } else {
@@ -648,12 +709,18 @@
                 // --- 2. Мобильные карточки ---
                 const card = document.createElement('div');
                 if (product.isHeader) {
+                    const interactive = product.collapsible;
                     card.className = "select-none mt-2";
                     card.innerHTML = `
-                        <div class="flex items-center gap-2.5 px-4 py-2.5 rounded-lg bg-indigo-600 text-white shadow-sm">
+                        <button type="button" ${interactive ? `data-toggle-group="${escapeHtml(product.groupId)}"` : 'tabindex="-1"'} aria-expanded="${!product.collapsed}"
+                            class="grp-header ${product.collapsed ? 'grp-collapsed' : ''} w-full flex items-center gap-2.5 px-4 py-2.5 rounded-lg bg-indigo-600 ${interactive ? 'active:bg-indigo-700 cursor-pointer' : ''} text-white text-left shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-white/70">
                             <i class="fa-solid fa-layer-group text-indigo-200 text-sm"></i>
                             <span class="font-bold text-xs uppercase tracking-widest">${escapeHtml(product.name)}</span>
-                        </div>
+                            <span class="ml-auto flex items-center gap-2.5 shrink-0">
+                                <span class="text-[11px] font-semibold bg-white/15 px-2 py-0.5 rounded-full">${product.childCount}</span>
+                                ${interactive ? '<i class="fa-solid fa-chevron-down grp-chevron text-xs"></i>' : ''}
+                            </span>
+                        </button>
                     `;
                 } else {
                     card.className = "bg-white rounded-xl p-4 border border-gray-200 shadow-sm flex flex-col gap-3";
@@ -697,6 +764,26 @@
         });
 
         retryBtn.addEventListener('click', fetchProducts);
+
+        // Сворачивание/разворачивание группы по клику на заголовок
+        document.addEventListener('click', e => {
+            const btn = e.target.closest('[data-toggle-group]');
+            if (!btn) return;
+            const id = btn.dataset.toggleGroup;
+            if (expandedGroups.has(id)) expandedGroups.delete(id);
+            else expandedGroups.add(id);
+            renderProducts();
+        });
+
+        // Кнопка «Свернуть всё / Развернуть всё»
+        document.getElementById('toggleAllBtn').addEventListener('click', () => {
+            const ids = currentVisibleGroups;
+            if (!ids.length) return;
+            const allExpanded = ids.every(id => expandedGroups.has(id));
+            if (allExpanded) ids.forEach(id => expandedGroups.delete(id));
+            else ids.forEach(id => expandedGroups.add(id));
+            renderProducts();
+        });
 
         function handleRefresh(btn) {
             const icon = btn.querySelector('i');
