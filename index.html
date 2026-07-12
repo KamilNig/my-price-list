@@ -296,6 +296,141 @@
             return Math.round(num).toLocaleString('ru-RU');
         }
 
+        // ============================================================
+        //  ГИБКОЕ РАСПОЗНАВАНИЕ СТОЛБЦОВ (Boards и любые новые столбцы)
+        //  Ключи строк приходят из заголовков таблицы, поэтому ищем их
+        //  по шаблонам — точное написание заголовка не важно.
+        // ============================================================
+
+        const NAME_PATTERN = /(^name$|наимен|назван|^деталь$|^товар$|^item$|^title$|^laptop[\s_]*name$)/i;
+        const SHOP_PATTERN = /(^shop$|магазин|поставщик|продавец|supplier|vendor|store)/i;
+        const PCS_PATTERN  = /(^pcs$|^шт\.?$|штук|кол[\s_-]*во|количест|остат|qty|quantity)/i;
+
+        // Цена продажи: приоритет — столбцы с «ТГ/KZT/₸», затем любые «цена/price».
+        // Закупочные и валютные столбцы исключаются.
+        const PRICE_KZT_PATTERN     = /(тг|тенге|kzt|₸)/i;
+        const PRICE_ANY_PATTERN     = /(цена|price|стоимость)/i;
+        const PRICE_EXCLUDE_PATTERN = /(cost|закуп|себест|опт|walrus|\$|usd|cny|юан|руб|₽)/i;
+
+        function fieldByPattern(product, pattern) {
+            for (const key of Object.keys(product)) {
+                if (!pattern.test(key)) continue;
+                const v = product[key];
+                if (v !== undefined && v !== null && String(v).trim() !== '') return String(v).trim();
+            }
+            return '';
+        }
+
+        function priceByPattern(product) {
+            let fallback = '';
+            for (const key of Object.keys(product)) {
+                if (PRICE_EXCLUDE_PATTERN.test(key)) continue;
+                const v = product[key];
+                if (v === undefined || v === null || String(v).trim() === '' || String(v).trim() === '0') continue;
+                if (PRICE_KZT_PATTERN.test(key)) return v;
+                if (!fallback && PRICE_ANY_PATTERN.test(key)) fallback = v;
+            }
+            return fallback;
+        }
+
+        // Приводим строки к каноническим ключам сразу после загрузки:
+        // дальше весь код работает с name/shop/pcs/selling_price_kzt как раньше
+        function normalizeAllProducts(data) {
+            Object.values(data).forEach(list => {
+                (Array.isArray(list) ? list : []).forEach(row => {
+                    if (!row || typeof row !== 'object') return;
+                    const empty = v => v === undefined || v === null || String(v).trim() === '';
+                    if (empty(row.name)) { const v = fieldByPattern(row, NAME_PATTERN); if (v) row.name = v; }
+                    if (empty(row.shop)) { const v = fieldByPattern(row, SHOP_PATTERN); if (v) row.shop = v; }
+                    if (empty(row.pcs))  { const v = fieldByPattern(row, PCS_PATTERN);  if (v) row.pcs = v; }
+                    if (empty(row.selling_price_kzt) || String(row.selling_price_kzt).trim() === '0') {
+                        const v = priceByPattern(row);
+                        if (v !== '') row.selling_price_kzt = v;
+                    }
+                });
+            });
+        }
+
+        // Новые столбцы: модель платы, модель ноутбука, характеристики, описание
+        const FIELD_PATTERNS = {
+            boardModel:  /(модель[\s_]*платы|номер[\s_]*платы|board[\s_]*(model|name)|motherboard|мат[\s_.]*плат|^плата$|^board$)/i,
+            laptopModel: /(модель[\s_]*ноут|ноутбук(?!а)|laptop(?![\s_]*name)|notebook|совместим)/i,
+            specs:       /(характеристик|спецификац|конфигурац|параметр|spec|config|characteristic)/i,
+            description: /(описание|description|коммент|примечан|note(?!book))/i
+        };
+
+        function getDetails(product) {
+            return {
+                boardModel:  fieldByPattern(product, FIELD_PATTERNS.boardModel),
+                laptopModel: fieldByPattern(product, FIELD_PATTERNS.laptopModel),
+                specs:       fieldByPattern(product, FIELD_PATTERNS.specs),
+                description: fieldByPattern(product, FIELD_PATTERNS.description)
+            };
+        }
+
+        // ── Прочие столбцы листа: показываем ВСЁ, что не системное ──
+        // Внутренняя экономика (закуп, наценка, $) клиентам не отдаётся
+        const EXTRA_HIDE_PATTERN = /(cost|закуп|себест|опт|walrus|наценк|коэф|маржа|\$|usd|cny|юан|руб|₽)/i;
+        const SYSTEM_KEYS = new Set(['name', 'pcs', 'shop', 'cost_price', 'walrus',
+            'selling_price_usd', 'selling_price_kzt',
+            'isHeader', 'groupId', 'childCount', 'collapsed', 'collapsible']);
+
+        // Ключи, уже показанные блоком деталей (модель/характеристики/описание)
+        function consumedDetailKeys(product) {
+            const used = new Set();
+            for (const pattern of Object.values(FIELD_PATTERNS)) {
+                for (const key of Object.keys(product)) {
+                    if (!pattern.test(key)) continue;
+                    const v = product[key];
+                    if (v !== undefined && v !== null && String(v).trim() !== '') { used.add(key); break; }
+                }
+            }
+            return used;
+        }
+
+        function prettyLabel(key) {
+            const s = String(key).replace(/_/g, ' ').trim();
+            return s.charAt(0).toUpperCase() + s.slice(1);
+        }
+
+        // Любые нераспознанные столбцы (что бы вы ни добавили в таблицу)
+        function getExtraFields(product) {
+            const consumed = consumedDetailKeys(product);
+            const extras = [];
+            for (const key of Object.keys(product)) {
+                if (SYSTEM_KEYS.has(key) || consumed.has(key)) continue;
+                if (PHOTO_KEY_PATTERN.test(key)) continue;                                // фото уже в ленте
+                if (PRICE_KZT_PATTERN.test(key) || PRICE_ANY_PATTERN.test(key)) continue; // цена уже в своей колонке
+                if (NAME_PATTERN.test(key) || SHOP_PATTERN.test(key) || PCS_PATTERN.test(key)) continue; // дубли канонических
+                if (EXTRA_HIDE_PATTERN.test(key)) continue;                               // внутренние данные
+                const v = product[key];
+                if (v === undefined || v === null || String(v).trim() === '') continue;
+                extras.push({ key: key, label: prettyLabel(key), value: String(v).trim() });
+            }
+            return extras;
+        }
+
+        // HTML-блок доп. информации под названием товара
+        function detailsHtml(product, searchVal) {
+            const d = getDetails(product);
+            const extras = getExtraFields(product);
+            if (!d.boardModel && !d.laptopModel && !d.specs && !d.description && !extras.length) return '';
+            const badge = (icon, text, title) => `<span title="${title}" class="inline-flex items-center gap-1.5 bg-slate-100 text-slate-700 border border-slate-200 rounded-md px-2 py-0.5 text-[11px] font-mono font-semibold"><i class="fa-solid ${icon} text-slate-400"></i>${highlightMatch(text, searchVal)}</span>`;
+            const badges = [];
+            if (d.boardModel)  badges.push(badge('fa-microchip', d.boardModel, 'Модель платы'));
+            if (d.laptopModel) badges.push(badge('fa-laptop', d.laptopModel, 'Модель ноутбука'));
+            let html = badges.length ? `<div class="flex flex-wrap gap-1.5 mt-1.5">${badges.join('')}</div>` : '';
+            if (d.specs)       html += `<div class="text-xs text-gray-500 mt-1.5 whitespace-pre-line leading-snug">${highlightMatch(d.specs, searchVal)}</div>`;
+            if (d.description) html += `<div class="text-xs text-gray-500 mt-1.5 whitespace-pre-line leading-snug">${highlightMatch(d.description, searchVal)}</div>`;
+            // Все прочие непустые столбцы — строками «Заголовок: значение»
+            if (extras.length) {
+                html += `<div class="mt-1.5 space-y-0.5">${extras.map(e =>
+                    `<div class="text-xs text-gray-500 leading-snug whitespace-pre-line"><span class="text-gray-400">${escapeHtml(e.label)}:</span> ${highlightMatch(e.value, searchVal)}</div>`
+                ).join('')}</div>`;
+            }
+            return html;
+        }
+
         // Определение строки-оглавления (заголовок раздела внутри листа)
         function isHeaderRow(product) {
             const hasName = product.name && product.name.trim() !== "";
@@ -303,7 +438,12 @@
             const hasNoPrice = !product.selling_price_kzt || product.selling_price_kzt === "0" || product.selling_price_kzt === "" || product.selling_price_kzt === "—";
             const hasNoCost = !product.cost_price || product.cost_price === "0" || product.cost_price === "";
             const hasNoPcs = !product.pcs || product.pcs === 0;
-            return hasName && hasNoShop && hasNoPrice && hasNoCost && hasNoPcs;
+            if (!(hasName && hasNoShop && hasNoPrice && hasNoCost && hasNoPcs)) return false;
+            // Строка с фото или доп. информацией — это товар, а не заголовок раздела
+            if (rawPhotoValues(product).length > 0) return false;
+            const d = getDetails(product);
+            if (d.boardModel || d.laptopModel || d.specs || d.description) return false;
+            return getExtraFields(product).length === 0;
         }
 
         // Бейдж наличия: зелёный / жёлтый (мало) / красный (под заказ)
@@ -331,18 +471,16 @@
         // Какие имена ключей/заголовков считаем фото-столбцом
         const PHOTO_KEY_PATTERN = /(фото|photo|foto|изображени|image|снимок|^img$|^pic$)/i;
 
-        // Достаём «сырое» значение фото-столбца из объекта товара
-        function rawPhotoValue(product) {
-            if (!product || typeof product !== 'object') return '';
-            for (const k of ['photo', 'photos', 'foto', 'image', 'images', 'img', 'фото', 'фотографии']) {
-                if (product[k] != null && product[k] !== '') return product[k];
-            }
+        // Достаём значения ВСЕХ фото-столбцов (Фото, Фото 2, photo_3 и т.д.)
+        function rawPhotoValues(product) {
+            if (!product || typeof product !== 'object') return [];
+            const values = [];
             for (const key of Object.keys(product)) {
-                if (PHOTO_KEY_PATTERN.test(key) && product[key] != null && product[key] !== '') {
-                    return product[key];
+                if (PHOTO_KEY_PATTERN.test(key) && product[key] != null && String(product[key]).trim() !== '') {
+                    values.push(String(product[key]));
                 }
             }
-            return '';
+            return values;
         }
 
         // ID файла Google Drive из ссылок разных форматов
@@ -374,27 +512,30 @@
             return null;
         }
 
-        // Список фото {thumb, full} из значения ячейки (ссылок может быть несколько)
+        // Список фото {thumb, full} из всех фото-столбцов
+        // (в каждой ячейке при этом может быть несколько ссылок)
         function getPhotos(product) {
-            const raw = rawPhotoValue(product);
-            if (!raw) return [];
-            const rawStr = String(raw).trim();
-
-            let parts;
-            if (/^=image\s*\(/i.test(rawStr)) {
-                parts = [rawStr]; // формулу =IMAGE(...) не разбиваем
-            } else {
-                parts = rawStr.split(/[\n,;|]+|\s{2,}/).map(s => s.trim()).filter(Boolean);
-                if (!parts.length) parts = [rawStr];
-            }
+            const rawList = rawPhotoValues(product);
+            if (!rawList.length) return [];
 
             const photos = [];
             const seen = new Set();
-            parts.forEach(p => {
-                const thumb = toImageUrl(p, 400);
-                if (!thumb || seen.has(thumb)) return;
-                seen.add(thumb);
-                photos.push({ thumb, full: toImageUrl(p, 2000) || thumb });
+            rawList.forEach(raw => {
+                const rawStr = String(raw).trim();
+                if (!rawStr) return;
+                let parts;
+                if (/^=image\s*\(/i.test(rawStr)) {
+                    parts = [rawStr]; // формулу =IMAGE(...) не разбиваем
+                } else {
+                    parts = rawStr.split(/[\n,;|]+|\s{2,}/).map(s => s.trim()).filter(Boolean);
+                    if (!parts.length) parts = [rawStr];
+                }
+                parts.forEach(p => {
+                    const thumb = toImageUrl(p, 400);
+                    if (!thumb || seen.has(thumb)) return;
+                    seen.add(thumb);
+                    photos.push({ thumb, full: toImageUrl(p, 2000) || thumb });
+                });
             });
             return photos;
         }
@@ -428,6 +569,7 @@
                 const response = await fetch(GOOGLE_API_URL);
                 if (!response.ok) throw new Error('Network response error');
                 allProducts = await response.json();
+                normalizeAllProducts(allProducts); // подхватываем любые названия заголовков
 
                 const sheetNames = Object.keys(allProducts);
                 if (sheetNames.length === 0) throw new Error('No sheets found');
@@ -478,9 +620,14 @@
         }
 
         function matchesQuery(item, searchVal) {
-            const inName = item.name && item.name.toLowerCase().includes(searchVal);
-            const inShop = item.shop && item.shop.toLowerCase().includes(searchVal);
-            return inName || inShop;
+            if (item.name && item.name.toLowerCase().includes(searchVal)) return true;
+            if (item.shop && item.shop.toLowerCase().includes(searchVal)) return true;
+            // Поиск по новым столбцам: модель платы/ноутбука, характеристики, описание
+            const d = getDetails(item);
+            if ([d.boardModel, d.laptopModel, d.specs, d.description]
+                .some(v => v && v.toLowerCase().includes(searchVal))) return true;
+            // …и по всем прочим отображаемым столбцам
+            return getExtraFields(item).some(e => e.value.toLowerCase().includes(searchVal));
         }
 
         function executeSearch() {
@@ -697,6 +844,7 @@
                     tr.innerHTML = `
                         <td class="px-6 py-4 font-medium text-gray-900 max-w-md break-words align-top">
                             <div>${nameHtml}</div>
+                            ${detailsHtml(product, searchVal)}
                             ${photoStripHtml(photos, product.name)}
                         </td>
                         <td class="px-6 py-4 text-gray-500 text-xs align-top">${shopHtml}</td>
@@ -729,6 +877,7 @@
                             <div class="font-semibold text-gray-900 text-sm break-words flex-1 leading-snug">${nameHtml}</div>
                             <div class="text-right font-bold text-blue-600 text-base whitespace-nowrap font-mono price">${priceHtml}</div>
                         </div>
+                        ${detailsHtml(product, searchVal)}
                         ${photoStripHtml(photos, product.name, 'photo-strip--scroll')}
                         <div class="flex justify-between items-center text-xs text-gray-500 pt-2.5 border-t border-gray-100 gap-2">
                             <span class="font-mono bg-gray-50 px-2 py-0.5 rounded border border-gray-100 truncate">${shopHtml}</span>
