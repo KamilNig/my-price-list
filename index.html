@@ -25,6 +25,18 @@
         /* Скрытие полосы прокрутки у вкладок (скролл жестом сохраняется) */
         #tabsContainer::-webkit-scrollbar { display: none; }
         #tabsContainer { -ms-overflow-style: none; scrollbar-width: none; }
+        #powseqScroll::-webkit-scrollbar { display: none; }
+        #powseqScroll { -ms-overflow-style: none; scrollbar-width: none; }
+
+        /* Закреплённая первая строка таблиц: шапка колонок липнет под хедером сайта.
+           На обёртке таблицы должен быть overflow-clip (не hidden), иначе sticky не работает */
+        .tbl-sticky thead th {
+            position: sticky;
+            top: var(--hdr-h, 64px);
+            z-index: 10;
+            background: #f9fafb;
+            box-shadow: 0 1px 0 #e5e7eb;
+        }
 
         /* Подсветка совпадений поиска */
         mark.hl {
@@ -170,7 +182,7 @@
             </div>
 
             <!-- ВЕРСИЯ ДЛЯ ДЕСКТОПОВ (Таблица, скрыта на мобильных) -->
-            <div class="hidden md:block bg-white rounded-xl shadow-sm overflow-hidden border border-gray-200">
+            <div class="tbl-sticky hidden md:block bg-white rounded-xl shadow-sm overflow-clip border border-gray-200">
                 <table class="min-w-full divide-y divide-gray-200 text-left text-sm">
                     <thead class="bg-gray-50 text-xs text-gray-500 uppercase font-semibold tracking-wide">
                         <tr>
@@ -193,6 +205,72 @@
 
         </div>
 
+        <!-- РУБРИКА «СТАРТ AMD»: последовательность запуска ноутбука -->
+        <div id="amdSeqContainer" class="hidden">
+
+            <!-- Загрузка листа последовательности -->
+            <div id="amdLoader" class="hidden flex flex-col items-center justify-center py-20">
+                <div class="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600 mb-4"></div>
+                <p class="text-gray-500 text-sm">Загрузка последовательности старта...</p>
+            </div>
+
+            <!-- Ошибка загрузки листа -->
+            <div id="amdError" class="hidden bg-red-50 border border-red-200 text-red-800 px-5 py-4 rounded-lg" role="alert">
+                <div class="flex items-start gap-3">
+                    <i class="fa-solid fa-triangle-exclamation text-red-500 mt-0.5"></i>
+                    <div class="flex-1">
+                        <strong class="font-bold block">Не удалось загрузить последовательность</strong>
+                        <span class="text-sm">Проверьте подключение и что таблица со стартом AMD открыта по ссылке (доступ «Читатель» всем, у кого есть ссылка).</span>
+                    </div>
+                    <button id="amdRetryBtn" type="button"
+                        class="shrink-0 px-4 py-2 rounded-lg bg-red-600 text-white text-sm font-semibold hover:bg-red-700 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-red-400">
+                        Повторить
+                    </button>
+                </div>
+            </div>
+
+            <!-- Содержимое рубрики -->
+            <div id="amdContent" class="hidden">
+
+                <!-- Заголовок открытой последовательности + пояснение -->
+                <div class="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 mb-3">
+                    <h2 class="text-sm font-extrabold text-slate-800 tracking-wide uppercase flex items-center gap-2 shrink-0">
+                        <i class="fa-solid fa-bolt text-amber-500"></i>
+                        Power Sequence — <span id="amdSheetTitle"></span>
+                    </h2>
+                    <p class="text-xs text-gray-500 leading-snug">
+                        Этапы идут в порядке запуска платы. Потребление — в мА при заниженном (отсутствующем) сигнале, по конкретным платам.
+                    </p>
+                </div>
+
+                <!-- Примечание к листу (2-я строка таблицы), если заполнено -->
+                <div id="amdSheetNote" class="hidden text-xs text-gray-500 italic mb-3 px-1 whitespace-pre-line leading-snug"></div>
+
+                <!-- Строка статуса -->
+                <div class="flex items-center justify-between text-xs text-gray-500 mb-3 px-1 gap-3">
+                    <div class="flex items-center gap-3 min-w-0">
+                        <span id="amdCounter"></span>
+                        <button id="amdToggleAllBtn" type="button"
+                            class="hidden items-center gap-1.5 bg-indigo-50 border border-indigo-200 text-indigo-700 hover:bg-indigo-100 font-semibold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 rounded-md px-2.5 py-1">
+                            <i class="fa-solid fa-angles-up text-[10px]"></i><span id="amdToggleAllLabel">Свернуть всё</span>
+                        </button>
+                    </div>
+                    <span id="amdLastUpdated" class="shrink-0"></span>
+                </div>
+
+                <!-- ВЕРСИЯ ДЛЯ ДЕСКТОПОВ (таблица) -->
+                <div class="tbl-sticky hidden md:block bg-white rounded-xl shadow-sm overflow-clip border border-gray-200">
+                    <table class="min-w-full divide-y divide-gray-200 text-left text-sm">
+                        <thead id="amdTableHead" class="bg-gray-50 text-xs text-gray-500 uppercase font-semibold tracking-wide"></thead>
+                        <tbody id="amdTableBody" class="divide-y divide-gray-100 bg-white"></tbody>
+                    </table>
+                </div>
+
+                <!-- ВЕРСИЯ ДЛЯ МОБИЛЬНЫХ (карточки) -->
+                <div id="amdCardsContainer" class="block md:hidden space-y-3"></div>
+            </div>
+        </div>
+
         <!-- Ничего не найдено -->
         <div id="noProducts" class="hidden text-center py-20">
             <i class="fa-regular fa-folder-open text-3xl text-gray-300 mb-3 block"></i>
@@ -204,7 +282,24 @@
         </div>
     </main>
 
-    <footer class="bg-white border-t border-gray-200 mt-8 py-6 text-center text-xs text-gray-400">
+    <!-- Рубрика POWER SEQUENCE — отдельная секция внизу, отделена от запчастей на продажу -->
+    <section class="bg-slate-900 mt-8">
+        <div class="max-w-7xl mx-auto px-4 py-5">
+            <div class="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4">
+                <span class="flex items-center gap-2 text-sm font-extrabold tracking-widest text-amber-400 uppercase shrink-0 select-none">
+                    <i class="fa-solid fa-bolt"></i> Power Sequence
+                </span>
+                <div id="powseqScroll" class="flex items-center gap-2 overflow-x-auto whitespace-nowrap flex-1">
+                    <div id="powseqTabs" class="flex gap-2">
+                        <!-- Кнопки последовательностей генерируются динамически -->
+                    </div>
+                </div>
+            </div>
+            <p class="text-xs text-slate-500 mt-2.5">Последовательность запуска ноутбука — отдельно от запчастей на продажу.</p>
+        </div>
+    </section>
+
+    <footer class="bg-white border-t border-gray-200 py-6 text-center text-xs text-gray-400">
         © 2026 Smart Repair Parts. Все права защищены.
     </footer>
 
@@ -569,12 +664,14 @@
                 const response = await fetch(GOOGLE_API_URL);
                 if (!response.ok) throw new Error('Network response error');
                 allProducts = await response.json();
+                applyPowseqSheets(allProducts._powseq); // список листов POWER SEQUENCE из таблицы
+                delete allProducts._powseq;             // служебный ключ — не вкладка с товарами
                 normalizeAllProducts(allProducts); // подхватываем любые названия заголовков
 
                 const sheetNames = Object.keys(allProducts);
                 if (sheetNames.length === 0) throw new Error('No sheets found');
 
-                if (!currentTab || !sheetNames.includes(currentTab)) {
+                if (!currentTab || (currentTab !== AMD_SEQ_TAB && !sheetNames.includes(currentTab))) {
                     currentTab = sheetNames[0];
                 }
                 lastFetchTime = new Date();
@@ -617,6 +714,10 @@
 
                 tabsContainer.appendChild(button);
             });
+
+            // Полоса POWER SEQUENCE живёт отдельно, но её активность
+            // зависит от текущей вкладки — обновляем вместе
+            renderPowseqTabs();
         }
 
         function matchesQuery(item, searchVal) {
@@ -636,6 +737,14 @@
             const sheetNames = Object.keys(allProducts);
 
             clearSearchBtn.classList.toggle('hidden', searchVal === '');
+
+            // Рубрика «Старт AMD» ищет только внутри своего листа
+            if (currentTab === AMD_SEQ_TAB) {
+                searchSummaryContainer.classList.add('hidden');
+                renderAmdView();
+                return;
+            }
+
             if (sheetNames.length === 0) return;
 
             if (searchVal === '') {
@@ -717,6 +826,8 @@
             productsTableBody.innerHTML = '';
             mobileCardsContainer.innerHTML = '';
             photoGroups = [];
+            amdSeqContainer.classList.add('hidden');
+            setAmdUiState(false);
 
             const searchVal = searchInput.value.toLowerCase().trim();
             const searchActive = searchVal !== '';
@@ -892,6 +1003,404 @@
             mobileCardsContainer.appendChild(fragmentCards);
         }
 
+        // ============================================================
+        //  РУБРИКА «СТАРТ AMD» — последовательность запуска ноутбука.
+        //  Данные грузятся напрямую из отдельной Google Таблицы (CSV),
+        //  Apps Script не участвует. Таблица должна быть открыта по
+        //  ссылке (доступ «Читатель» всем, у кого есть ссылка).
+        //  Чтобы добавить ещё лист (5000u, 4000...), допишите строку
+        //  {gid, title} в AMD_SEQ_SHEETS — gid виден в ссылке листа
+        //  (#gid=...), появится переключатель листов.
+        // ============================================================
+
+        const AMD_SEQ_SHEET_ID = '1MLdDIIsoxx5IkqHYagqOH1WausWKPhXhFqyOCXnrOuw';
+        // Резервный список листов. Рабочий список приходит с бэкенда
+        // (ключ _powseq в Code.gs): бэкенд перечисляет страницы таблицы,
+        // поэтому новые листы появляются на сайте сами, без правки кода.
+        let AMD_SEQ_SHEETS = [
+            { gid: 0,          title: 'Ryzen5000-7000' },
+            { gid: 373739734,  title: '5000u' },
+            { gid: 2013661765, title: '4000' }
+        ];
+        const AMD_SEQ_TAB = '__amd_seq__';      // служебный id вкладки (не имя листа товаров)
+
+        const amdSeqContainer = document.getElementById('amdSeqContainer');
+        const amdLoader = document.getElementById('amdLoader');
+        const amdError = document.getElementById('amdError');
+        const amdContent = document.getElementById('amdContent');
+        const powseqTabs = document.getElementById('powseqTabs');
+        const amdSheetTitle = document.getElementById('amdSheetTitle');
+        const amdSheetNote = document.getElementById('amdSheetNote');
+        const amdTableHead = document.getElementById('amdTableHead');
+        const amdTableBody = document.getElementById('amdTableBody');
+        const amdCardsContainer = document.getElementById('amdCardsContainer');
+        const amdCounter = document.getElementById('amdCounter');
+        const amdLastUpdated = document.getElementById('amdLastUpdated');
+        const amdToggleAllBtn = document.getElementById('amdToggleAllBtn');
+        const amdToggleAllLabel = document.getElementById('amdToggleAllLabel');
+        const inStockLabel = inStockFilter.closest('label');
+
+        let amdCurrentGid = AMD_SEQ_SHEETS[0].gid;
+        const amdCache = {};               // gid -> разобранные данные листа
+        let amdFetchTime = null;
+        const amdCollapsed = new Set();    // свёрнутые этапы (по умолчанию всё развёрнуто)
+        let amdLoading = false;
+
+        // Связка «таблица → сайт»: применяем список листов POWER SEQUENCE,
+        // который бэкенд прочитал из самой таблицы
+        function applyPowseqSheets(list) {
+            if (!Array.isArray(list)) return;
+            const clean = list
+                .filter(s => s && s.title !== undefined && s.gid !== undefined)
+                .map(s => ({ gid: Number(s.gid), title: String(s.title).trim() }))
+                .filter(s => !isNaN(s.gid) && s.title !== '');
+            if (!clean.length) return;
+            AMD_SEQ_SHEETS = clean;
+            if (!clean.some(s => s.gid === amdCurrentGid)) amdCurrentGid = clean[0].gid;
+        }
+
+        // В рубрике фильтр «Только в наличии» не имеет смысла — прячем
+        function setAmdUiState(isAmd) {
+            inStockLabel.style.display = isAmd ? 'none' : '';
+            searchInput.placeholder = isAmd
+                ? 'Поиск по сигналу или описанию...'
+                : 'Поиск по названию или магазину...';
+        }
+
+        // Разбор CSV: кавычки, запятые и переносы строк внутри ячеек
+        function parseCsv(text) {
+            const rows = [];
+            let row = [], field = '', inQuotes = false;
+            for (let i = 0; i < text.length; i++) {
+                const ch = text[i];
+                if (inQuotes) {
+                    if (ch === '"') {
+                        if (text[i + 1] === '"') { field += '"'; i++; }
+                        else inQuotes = false;
+                    } else field += ch;
+                } else if (ch === '"') {
+                    inQuotes = true;
+                } else if (ch === ',') {
+                    row.push(field); field = '';
+                } else if (ch === '\n' || ch === '\r') {
+                    if (ch === '\r' && text[i + 1] === '\n') i++;
+                    row.push(field); rows.push(row);
+                    row = []; field = '';
+                } else {
+                    field += ch;
+                }
+            }
+            if (field !== '' || row.length) { row.push(field); rows.push(row); }
+            return rows;
+        }
+
+        // Раскладка листа: A — этап, дальше столбцы ищем по заголовкам
+        // 1-й строки; модели плат — во 2-й строке над столбцами потребления.
+        function parseAmdSheet(rows) {
+            const header = (rows[0] || []).map(h => String(h || '').trim());
+            const modelRow = rows[1] || [];
+            const colOf = re => header.findIndex(h => re.test(h));
+            const col = {
+                name: colOf(/назван|сигнал/i),
+                desc: colOf(/описан/i),
+                volt: colOf(/напряжен/i),
+                res:  colOf(/сопротивлен/i),
+                cons: colOf(/потребл/i)
+            };
+            if (col.name <= 0) col.name = 1;
+            if (col.desc < 0) col.desc = 2;
+            if (col.volt < 0) col.volt = 3;
+            if (col.cons < 0) col.cons = 5;
+
+            const models = [];
+            for (let c = col.cons; c < Math.max(header.length, modelRow.length); c++) {
+                const name = String(modelRow[c] || '').trim();
+                if (name) models.push({ col: c, name });
+            }
+
+            // Примечание к листу — текст во 2-й строке до столбцов потребления
+            const note = modelRow.slice(1, col.cons)
+                .map(v => String(v || '').trim()).filter(Boolean).join('\n');
+
+            const stages = [];
+            let stage = null, afterGap = false;
+            for (let i = 2; i < rows.length; i++) {
+                const r = rows[i] || [];
+                const cell = c => c >= 0 ? String(r[c] || '').trim() : '';
+                if (r.every(v => String(v || '').trim() === '')) { afterGap = true; continue; }
+                if (cell(0)) {
+                    stage = { title: cell(0), signals: [] };
+                    stages.push(stage);
+                    afterGap = false;
+                }
+                const name = cell(col.name);
+                if (!name) continue;
+                if (!stage) { stage = { title: '', signals: [] }; stages.push(stage); }
+                stage.signals.push({
+                    name,
+                    desc: cell(col.desc),
+                    voltage: cell(col.volt),
+                    resistance: cell(col.res),
+                    cons: models.map(m => ({ model: m.name, value: cell(m.col) }))
+                                .filter(c => c.value !== ''),
+                    gap: afterGap && stage.signals.length > 0 // пустая строка в листе = разделитель внутри этапа
+                });
+                afterGap = false;
+            }
+
+            const cleanStages = stages.filter(s => s.signals.length > 0);
+            cleanStages.forEach((s, i) => { s.num = i + 1; });
+            return {
+                models,
+                note,
+                stages: cleanStages,
+                total: cleanStages.reduce((n, s) => n + s.signals.length, 0),
+                hasResistance: cleanStages.some(s => s.signals.some(x => x.resistance))
+            };
+        }
+
+        // Только export?format=csv: gviz-эндпоинт приводит столбцы к типам
+        // и теряет текст в числовых столбцах (названия моделей, примечания)
+        function amdCsvUrl(gid) {
+            return `https://docs.google.com/spreadsheets/d/${AMD_SEQ_SHEET_ID}/export?format=csv&gid=${gid}`;
+        }
+
+        async function fetchAmdSheet() {
+            if (amdLoading) return;
+            amdLoading = true;
+            const gid = amdCurrentGid;
+            amdLoader.classList.remove('hidden');
+            amdError.classList.add('hidden');
+            amdContent.classList.add('hidden');
+            try {
+                const response = await fetch(amdCsvUrl(gid));
+                if (!response.ok) throw new Error('HTTP ' + response.status);
+                amdCache[gid] = parseAmdSheet(parseCsv(await response.text()));
+                amdFetchTime = new Date();
+                amdLoader.classList.add('hidden');
+                renderPowseqTabs(); // счётчик сигналов на кнопке в полосе
+                if (currentTab === AMD_SEQ_TAB) renderAmdView();
+            } catch (error) {
+                console.error('Ошибка загрузки последовательности AMD:', error);
+                amdLoader.classList.add('hidden');
+                if (currentTab === AMD_SEQ_TAB) amdError.classList.remove('hidden');
+            } finally {
+                amdLoading = false;
+            }
+        }
+
+        async function refreshAmdData() {
+            delete amdCache[amdCurrentGid];
+            await fetchAmdSheet();
+        }
+
+        function amdStageKey(gid, num) { return gid + '#' + num; }
+
+        function amdSignalMatches(sig, q) {
+            if (sig.name.toLowerCase().includes(q)) return true;
+            if (sig.desc.toLowerCase().includes(q)) return true;
+            if (sig.voltage.toLowerCase().includes(q)) return true;
+            if (sig.resistance.toLowerCase().includes(q)) return true;
+            return sig.cons.some(c => c.model.toLowerCase().includes(q) || c.value.toLowerCase().includes(q));
+        }
+
+        // Точка входа рубрики: прячет товары, показывает контейнер и данные
+        function renderAmdView() {
+            setAmdUiState(true);
+            tableContainer.classList.add('hidden');
+            noProducts.classList.add('hidden');
+            errorMessage.classList.add('hidden');
+            searchSummaryContainer.classList.add('hidden');
+            loader.classList.add('hidden');
+            amdSeqContainer.classList.remove('hidden');
+
+            const data = amdCache[amdCurrentGid];
+            if (!data) { fetchAmdSheet(); return; }
+            amdLoader.classList.add('hidden');
+            amdError.classList.add('hidden');
+            renderAmdSheet(data);
+        }
+
+        // Кнопки последовательностей в тёмной полосе POWER SEQUENCE.
+        // Полоса видна всегда — переход в рубрику возможен с любой вкладки.
+        function renderPowseqTabs() {
+            powseqTabs.innerHTML = '';
+            AMD_SEQ_SHEETS.forEach(sheet => {
+                const isActive = currentTab === AMD_SEQ_TAB && sheet.gid === amdCurrentGid;
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = `flex items-center gap-1.5 px-3.5 py-1.5 rounded-md text-xs font-bold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 shrink-0 ${
+                    isActive
+                    ? 'bg-amber-400 text-slate-900'
+                    : 'bg-slate-800 text-slate-300 border border-slate-700 hover:bg-slate-700 hover:text-white'
+                }`;
+                const data = amdCache[sheet.gid];
+                btn.innerHTML = escapeHtml(sheet.title) +
+                    (data ? ` <span class="text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${isActive ? 'bg-slate-900/15' : 'bg-white/10'}">${data.total}</span>` : '');
+                btn.addEventListener('click', () => {
+                    amdCurrentGid = sheet.gid;
+                    currentTab = AMD_SEQ_TAB;
+                    renderTabs(Object.keys(allProducts));
+                    executeSearch();
+                    // Полоса внизу, а содержимое рубрики — вверху: поднимаем к нему
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                });
+                powseqTabs.appendChild(btn);
+            });
+        }
+
+        function renderAmdSheet(data) {
+            const sheet = AMD_SEQ_SHEETS.find(s => s.gid === amdCurrentGid);
+            amdSheetTitle.textContent = sheet ? sheet.title : '';
+            amdSheetNote.textContent = data.note || '';
+            amdSheetNote.classList.toggle('hidden', !data.note);
+
+            const searchVal = searchInput.value.toLowerCase().trim();
+            const searchActive = searchVal !== '';
+
+            // Этап подходит целиком (по названию) либо отдельными сигналами
+            const visibleStages = [];
+            let shown = 0;
+            data.stages.forEach(st => {
+                let signals = st.signals;
+                if (searchActive && !st.title.toLowerCase().includes(searchVal)) {
+                    signals = st.signals.filter(sig => amdSignalMatches(sig, searchVal));
+                    if (!signals.length) return;
+                }
+                shown += signals.length;
+                visibleStages.push({ ...st, signals });
+            });
+
+            if (!visibleStages.length) {
+                amdContent.classList.add('hidden');
+                noProducts.classList.remove('hidden');
+                return;
+            }
+            noProducts.classList.add('hidden');
+            amdContent.classList.remove('hidden');
+
+            amdCounter.textContent = `Сигналов: ${shown}`;
+            amdLastUpdated.textContent = amdFetchTime
+                ? `Обновлено в ${amdFetchTime.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}`
+                : '';
+
+            // «Свернуть/развернуть всё» — только вне поиска
+            if (!searchActive) {
+                const allCollapsed = data.stages.every(st => amdCollapsed.has(amdStageKey(amdCurrentGid, st.num)));
+                amdToggleAllBtn.classList.remove('hidden');
+                amdToggleAllBtn.classList.add('inline-flex');
+                amdToggleAllLabel.textContent = allCollapsed ? 'Развернуть всё' : 'Свернуть всё';
+                amdToggleAllBtn.querySelector('i').className = `fa-solid ${allCollapsed ? 'fa-angles-down' : 'fa-angles-up'} text-[10px]`;
+            } else {
+                amdToggleAllBtn.classList.add('hidden');
+                amdToggleAllBtn.classList.remove('inline-flex');
+            }
+
+            const consHeader = 'Потребление при заниженном сигнале, мА';
+            const colCount = 4 + (data.hasResistance ? 1 : 0);
+            amdTableHead.innerHTML = `
+                <tr>
+                    <th scope="col" class="px-6 py-4">Сигнал / питание</th>
+                    <th scope="col" class="px-6 py-4">Описание</th>
+                    <th scope="col" class="px-6 py-4 whitespace-nowrap">Напряжение</th>
+                    ${data.hasResistance ? '<th scope="col" class="px-6 py-4 whitespace-nowrap">Сопротивление, Ом</th>' : ''}
+                    <th scope="col" class="px-6 py-4">${consHeader}</th>
+                </tr>`;
+
+            const hl = t => highlightMatch(t, searchVal);
+            let tableHtml = '';
+            let cardsHtml = '';
+
+            visibleStages.forEach(st => {
+                const key = amdStageKey(amdCurrentGid, st.num);
+                const collapsed = !searchActive && amdCollapsed.has(key);
+                const interactive = !searchActive;
+
+                const headerInner = `
+                    <i class="fa-solid fa-layer-group text-indigo-200 text-sm"></i>
+                    <span class="font-bold text-xs md:text-sm uppercase tracking-wide">${st.num}. ${hl(st.title || 'Прочее')}</span>
+                    <span class="ml-auto flex items-center gap-3 shrink-0">
+                        <span class="text-[11px] font-semibold bg-white/15 px-2 py-0.5 rounded-full">${st.signals.length}</span>
+                        ${interactive ? '<i class="fa-solid fa-chevron-down grp-chevron text-xs"></i>' : ''}
+                    </span>`;
+
+                tableHtml += `
+                    <tr><td colspan="${colCount}" class="p-0 select-none">
+                        <button type="button" ${interactive ? `data-amd-toggle="${escapeHtml(key)}"` : 'tabindex="-1"'} aria-expanded="${!collapsed}"
+                            class="grp-header ${collapsed ? 'grp-collapsed' : ''} w-full flex items-center gap-2.5 px-6 py-2.5 bg-indigo-600 ${interactive ? 'hover:bg-indigo-700 cursor-pointer' : 'cursor-default'} text-white text-left transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-white/70">
+                            ${headerInner}
+                        </button>
+                    </td></tr>`;
+
+                cardsHtml += `
+                    <div class="select-none mt-2">
+                        <button type="button" ${interactive ? `data-amd-toggle="${escapeHtml(key)}"` : 'tabindex="-1"'} aria-expanded="${!collapsed}"
+                            class="grp-header ${collapsed ? 'grp-collapsed' : ''} w-full flex items-center gap-2.5 px-4 py-2.5 rounded-lg bg-indigo-600 ${interactive ? 'active:bg-indigo-700 cursor-pointer' : ''} text-white text-left shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-white/70">
+                            ${headerInner}
+                        </button>
+                    </div>`;
+
+                if (collapsed) return;
+
+                st.signals.forEach(sig => {
+                    const consHtml = sig.cons.map(c =>
+                        `<div class="leading-snug"><span class="text-gray-400">${hl(c.model)}:</span> <span class="font-mono font-semibold text-gray-700">${hl(c.value)}</span></div>`
+                    ).join('');
+
+                    tableHtml += `
+                        <tr class="hover:bg-blue-50/40 transition-colors ${sig.gap ? 'border-t-2 border-gray-200' : ''}">
+                            <td class="px-6 py-3.5 align-top max-w-[240px]">
+                                <span class="font-mono text-[13px] font-semibold text-gray-900 break-words">${hl(sig.name)}</span>
+                            </td>
+                            <td class="px-6 py-3.5 align-top text-xs text-gray-500 whitespace-pre-line leading-snug max-w-xl">${hl(sig.desc) || '—'}</td>
+                            <td class="px-6 py-3.5 align-top font-mono text-xs font-semibold text-blue-600 whitespace-nowrap">${hl(sig.voltage) || '—'}</td>
+                            ${data.hasResistance ? `<td class="px-6 py-3.5 align-top font-mono text-xs text-gray-700">${hl(sig.resistance) || '—'}</td>` : ''}
+                            <td class="px-6 py-3.5 align-top text-xs"><div class="space-y-0.5">${consHtml || '<span class="text-gray-300">—</span>'}</div></td>
+                        </tr>`;
+
+                    cardsHtml += `
+                        <div class="bg-white rounded-xl p-4 border border-gray-200 shadow-sm ${sig.gap ? 'mt-4' : ''}">
+                            <div class="flex justify-between items-start gap-3">
+                                <div class="font-mono text-[13px] font-semibold text-gray-900 break-words flex-1">${hl(sig.name)}</div>
+                                ${sig.voltage ? `<div class="shrink-0 font-mono text-xs font-bold text-blue-600 bg-blue-50 border border-blue-100 rounded-md px-2 py-0.5">${hl(sig.voltage)}</div>` : ''}
+                            </div>
+                            ${sig.desc ? `<div class="text-xs text-gray-500 mt-1.5 whitespace-pre-line leading-snug">${hl(sig.desc)}</div>` : ''}
+                            ${sig.resistance ? `<div class="text-xs text-gray-500 mt-1.5"><span class="text-gray-400">Сопротивление, Ом:</span> <span class="font-mono font-semibold text-gray-700">${hl(sig.resistance)}</span></div>` : ''}
+                            ${sig.cons.length ? `
+                                <div class="mt-2.5 pt-2.5 border-t border-gray-100">
+                                    <div class="text-[10px] uppercase tracking-wide text-gray-400 font-semibold mb-1">${consHeader}</div>
+                                    <div class="space-y-0.5 text-xs">${consHtml}</div>
+                                </div>` : ''}
+                        </div>`;
+                });
+            });
+
+            amdTableBody.innerHTML = tableHtml;
+            amdCardsContainer.innerHTML = cardsHtml;
+        }
+
+        // Сворачивание этапа рубрики (делегирование — строки перерисовываются)
+        document.addEventListener('click', e => {
+            const btn = e.target.closest('[data-amd-toggle]');
+            if (!btn) return;
+            const key = btn.dataset.amdToggle;
+            if (amdCollapsed.has(key)) amdCollapsed.delete(key);
+            else amdCollapsed.add(key);
+            renderAmdView();
+        });
+
+        amdToggleAllBtn.addEventListener('click', () => {
+            const data = amdCache[amdCurrentGid];
+            if (!data) return;
+            const keys = data.stages.map(st => amdStageKey(amdCurrentGid, st.num));
+            const allCollapsed = keys.every(k => amdCollapsed.has(k));
+            if (allCollapsed) keys.forEach(k => amdCollapsed.delete(k));
+            else keys.forEach(k => amdCollapsed.add(k));
+            renderAmdView();
+        });
+
+        document.getElementById('amdRetryBtn').addEventListener('click', fetchAmdSheet);
+
         // --- Обработчики ---
         let searchDebounce = null;
         searchInput.addEventListener('input', () => {
@@ -937,7 +1446,8 @@
         function handleRefresh(btn) {
             const icon = btn.querySelector('i');
             icon.classList.add('fa-spin');
-            fetchProducts().finally(() => icon.classList.remove('fa-spin'));
+            const task = currentTab === AMD_SEQ_TAB ? refreshAmdData() : fetchProducts();
+            task.finally(() => icon.classList.remove('fa-spin'));
         }
         document.getElementById('refreshBtn').addEventListener('click', e => handleRefresh(e.currentTarget));
         document.getElementById('refreshBtnDesktop').addEventListener('click', e => handleRefresh(e.currentTarget));
@@ -1032,6 +1542,15 @@
             }
         });
 
+        // Высота хедера → CSS-переменная: под ней закрепляется первая строка таблиц
+        const siteHeader = document.querySelector('header');
+        function updateHeaderOffset() {
+            document.documentElement.style.setProperty('--hdr-h', siteHeader.offsetHeight + 'px');
+        }
+        window.addEventListener('resize', updateHeaderOffset);
+
+        updateHeaderOffset();
+        renderPowseqTabs();
         fetchProducts();
     </script>
 </body>
