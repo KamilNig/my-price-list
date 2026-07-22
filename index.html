@@ -28,11 +28,23 @@
         #powseqScroll::-webkit-scrollbar { display: none; }
         #powseqScroll { -ms-overflow-style: none; scrollbar-width: none; }
 
-        /* Закреплённая первая строка таблиц: шапка колонок липнет под хедером сайта.
-           На обёртке таблицы должен быть overflow-clip (не hidden), иначе sticky не работает */
+        /* Вкладки категорий (AMD, Intel...) закреплены: липнут под хедером при прокрутке */
+        #tabsBar { position: sticky; top: var(--hdr-h, 64px); z-index: 20; }
+
+        /* В режиме POWER SEQUENCE полоса выбора листов закреплена внизу экрана */
+        #powseqBand.powseq-pinned {
+            position: sticky;
+            bottom: 0;
+            z-index: 20;
+            box-shadow: 0 -4px 14px rgba(15, 23, 42, .3);
+        }
+
+        /* Закреплённая первая строка таблиц: шапка колонок липнет под хедером
+           сайта и закреплёнными вкладками. На обёртке таблицы должен быть
+           overflow-clip (не hidden), иначе sticky не работает */
         .tbl-sticky thead th {
             position: sticky;
-            top: var(--hdr-h, 64px);
+            top: calc(var(--hdr-h, 64px) + var(--tabs-h, 0px));
             z-index: 10;
             background: #f9fafb;
             box-shadow: 0 1px 0 #e5e7eb;
@@ -138,8 +150,8 @@
         </div>
     </header>
 
-    <!-- Вкладки категорий (свайпаются пальцем на мобильном) -->
-    <div class="bg-white border-b border-gray-200 shadow-sm">
+    <!-- Вкладки категорий (свайпаются пальцем на мобильном; закреплены при прокрутке) -->
+    <div id="tabsBar" class="bg-white border-b border-gray-200 shadow-sm">
         <div class="max-w-7xl mx-auto px-4">
             <div id="tabsContainer" class="flex overflow-x-auto whitespace-nowrap gap-1 -mb-px">
                 <!-- Вкладки генерируются динамически -->
@@ -302,8 +314,9 @@
         </div>
     </main>
 
-    <!-- Рубрика POWER SEQUENCE — отдельная секция внизу, отделена от запчастей на продажу -->
-    <section class="bg-slate-900 mt-8">
+    <!-- Рубрика POWER SEQUENCE — отдельная секция внизу, отделена от запчастей
+         на продажу. В режиме рубрики закрепляется внизу экрана (powseq-pinned) -->
+    <section id="powseqBand" class="bg-slate-900 mt-8">
         <div class="max-w-7xl mx-auto px-4 py-5">
             <div class="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4">
                 <span class="flex items-center gap-2 text-sm font-extrabold tracking-widest text-amber-400 uppercase shrink-0 select-none">
@@ -863,6 +876,7 @@
             // Полоса POWER SEQUENCE живёт отдельно, но её активность
             // зависит от текущей вкладки — обновляем вместе
             renderPowseqTabs();
+            updateHeaderOffset(); // высота вкладок могла измениться
         }
 
         function matchesQuery(item, searchVal) {
@@ -1202,9 +1216,11 @@
             if (!clean.some(s => s.gid === amdCurrentGid)) amdCurrentGid = clean[0].gid;
         }
 
-        // В рубрике фильтр «Только в наличии» не имеет смысла — прячем
+        // В рубрике фильтр «Только в наличии» не имеет смысла — прячем;
+        // полоса выбора листов POWER SEQUENCE закрепляется внизу экрана
         function setAmdUiState(isAmd) {
             inStockLabel.style.display = isAmd ? 'none' : '';
+            document.getElementById('powseqBand').classList.toggle('powseq-pinned', isAmd);
             searchInput.placeholder = isAmd
                 ? 'Поиск по сигналу или описанию...'
                 : 'Поиск по названию или магазину...';
@@ -1716,12 +1732,21 @@
             }
         });
 
-        // Высота хедера → CSS-переменная: под ней закрепляется первая строка таблиц
+        // Высоты хедера и вкладок → CSS-переменные: под ними закрепляются
+        // вкладки категорий и первая строка таблиц
         const siteHeader = document.querySelector('header');
+        const tabsBar = document.getElementById('tabsBar');
         function updateHeaderOffset() {
             document.documentElement.style.setProperty('--hdr-h', siteHeader.offsetHeight + 'px');
+            document.documentElement.style.setProperty('--tabs-h', tabsBar.offsetHeight + 'px');
         }
         window.addEventListener('resize', updateHeaderOffset);
+        // Пересчёт при любом изменении высоты (загрузка шрифтов, переносы строк)
+        const offsetObserver = new ResizeObserver(updateHeaderOffset);
+        offsetObserver.observe(siteHeader);
+        offsetObserver.observe(tabsBar);
+        window.addEventListener('load', updateHeaderOffset);
+        if (document.fonts && document.fonts.ready) document.fonts.ready.then(updateHeaderOffset);
 
         updateHeaderOffset();
         updateBufferStamp();
