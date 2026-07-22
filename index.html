@@ -97,11 +97,17 @@
                     </h1>
                     <p class="text-xs text-slate-400 mt-0.5 hidden md:block">Цены и наличие компонентов в реальном времени</p>
                 </div>
-                <!-- Кнопка обновления данных (на мобильном — рядом с заголовком) -->
-                <button id="refreshBtn" type="button" title="Обновить данные из таблицы"
-                    class="md:hidden text-slate-300 hover:text-white p-2 rounded-lg hover:bg-slate-800 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500">
-                    <i class="fa-solid fa-rotate"></i>
-                </button>
+                <!-- Кнопка обновления + время буфера (на мобильном — рядом с заголовком) -->
+                <div class="md:hidden flex items-center gap-1.5">
+                    <div class="flex flex-col items-end leading-tight text-right select-none" title="Когда цены и наличие загружены из таблицы">
+                        <span class="text-[9px] uppercase tracking-wide text-slate-500">Обновлено</span>
+                        <span data-buffer-stamp class="text-[11px] font-semibold text-slate-300 font-mono"></span>
+                    </div>
+                    <button id="refreshBtn" type="button" title="Обновить данные из таблицы"
+                        class="text-slate-300 hover:text-white p-2 rounded-lg hover:bg-slate-800 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500">
+                        <i class="fa-solid fa-rotate"></i>
+                    </button>
+                </div>
             </div>
 
             <!-- Поиск и фильтры -->
@@ -120,6 +126,10 @@
                     <input type="checkbox" id="inStockFilter" class="rounded text-blue-500 focus:ring-blue-500 h-4 w-4 bg-slate-700 border-slate-600">
                     <span>Только в наличии</span>
                 </label>
+                <div class="hidden md:flex flex-col items-end justify-center leading-tight text-right select-none shrink-0" title="Когда цены и наличие загружены из таблицы">
+                    <span class="text-[10px] uppercase tracking-wide text-slate-500">Обновлено</span>
+                    <span data-buffer-stamp class="text-xs font-semibold text-slate-300 font-mono"></span>
+                </div>
                 <button id="refreshBtnDesktop" type="button" title="Обновить данные из таблицы"
                     class="hidden md:flex items-center justify-center text-slate-300 hover:text-white w-10 h-10 rounded-lg hover:bg-slate-800 border border-slate-700 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500">
                     <i class="fa-solid fa-rotate"></i>
@@ -255,7 +265,17 @@
                             <i class="fa-solid fa-angles-up text-[10px]"></i><span id="amdToggleAllLabel">Свернуть всё</span>
                         </button>
                     </div>
-                    <span id="amdLastUpdated" class="shrink-0"></span>
+                    <!-- Время буфера листа + своя кнопка обновления рубрики -->
+                    <div class="flex items-center gap-2 shrink-0" title="Когда последовательность загружена из таблицы">
+                        <div class="flex flex-col items-end leading-tight text-right select-none">
+                            <span class="text-[9px] uppercase tracking-wide text-gray-400">Обновлено</span>
+                            <span id="amdBufferStamp" class="text-[11px] font-semibold text-gray-600 font-mono"></span>
+                        </div>
+                        <button id="amdRefreshBtn" type="button" title="Обновить лист из таблицы"
+                            class="flex items-center justify-center w-8 h-8 rounded-lg bg-white border border-gray-300 text-gray-500 hover:text-gray-800 hover:bg-gray-100 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400">
+                            <i class="fa-solid fa-rotate text-sm"></i>
+                        </button>
+                    </div>
                 </div>
 
                 <!-- ВЕРСИЯ ДЛЯ ДЕСКТОПОВ (таблица) -->
@@ -655,7 +675,96 @@
             return `<div class="photo-strip ${extraWrapClass}">${thumbs}</div>`;
         }
 
-        async function fetchProducts() {
+        // ============================================================
+        //  СУТОЧНЫЙ БУФЕР (localStorage)
+        //  Данные грузятся из таблиц один раз при первом открытии за
+        //  день и сохраняются в буфер — повторные открытия мгновенные.
+        //  Принудительное обновление — только кнопкой «Обновить» 🔄.
+        // ============================================================
+
+        const CACHE_KEY = 'srp_cache_v1';
+
+        function cacheDayStr() {
+            const d = new Date();
+            return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
+        }
+
+        // Буфер как есть (может быть вчерашним — запасной вариант при сбое сети)
+        function readCacheAny() {
+            try { return JSON.parse(localStorage.getItem(CACHE_KEY)) || null; }
+            catch { return null; }
+        }
+
+        // Буфер только за сегодня — для обычного открытия сайта
+        function readCacheToday() {
+            const c = readCacheAny();
+            return c && c.day === cacheDayStr() ? c : null;
+        }
+
+        function writeCache(patch) {
+            try {
+                const today = cacheDayStr();
+                let c = readCacheAny();
+                if (!c || c.day !== today) c = { day: today }; // новый день — буфер с нуля
+                Object.assign(c, patch);
+                localStorage.setItem(CACHE_KEY, JSON.stringify(c));
+            } catch (e) { /* приватный режим или нет места — работаем без буфера */ }
+        }
+
+        function formatFetchTime(d) {
+            if (!d) return '';
+            const time = d.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+            return d.toDateString() === new Date().toDateString()
+                ? `Обновлено в ${time}`
+                : `Обновлено ${d.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' })} в ${time}`;
+        }
+
+        // «ДД.ММ, ЧЧ:ММ» для меток у кнопок обновления
+        function stampText(d) {
+            return d
+                ? `${d.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' })}, ${d.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}`
+                : '—';
+        }
+
+        // Дата и время синхронизации буфера цен — метки рядом с кнопками 🔄
+        function updateBufferStamp() {
+            const text = stampText(lastFetchTime);
+            document.querySelectorAll('[data-buffer-stamp]').forEach(el => { el.textContent = text; });
+        }
+
+        // Разбор ответа бэкенда (или буфера) и отрисовка
+        function applyProductsData(raw) {
+            allProducts = raw;
+            applyPowseqSheets(allProducts._powseq); // список листов POWER SEQUENCE из таблицы
+            delete allProducts._powseq;             // служебный ключ — не вкладка с товарами
+            normalizeAllProducts(allProducts); // подхватываем любые названия заголовков
+
+            const sheetNames = Object.keys(allProducts);
+            if (sheetNames.length === 0) throw new Error('No sheets found');
+
+            if (!currentTab || (currentTab !== AMD_SEQ_TAB && !sheetNames.includes(currentTab))) {
+                currentTab = sheetNames[0];
+            }
+            renderTabs(sheetNames);
+            updateBufferStamp();
+            loader.classList.add('hidden');
+            tableContainer.classList.remove('hidden');
+            executeSearch();
+        }
+
+        // force=true — принудительная загрузка из таблицы (кнопка «Обновить»);
+        // без force повторные открытия за день берут данные из буфера
+        async function fetchProducts(force = false) {
+            if (!force) {
+                const c = readCacheToday();
+                if (c && c.products) {
+                    try {
+                        lastFetchTime = c.productsAt ? new Date(c.productsAt) : null;
+                        applyProductsData(c.products);
+                        return;
+                    } catch (e) { /* битый буфер — грузим из таблицы */ }
+                }
+            }
             loader.classList.remove('hidden');
             errorMessage.classList.add('hidden');
             tableContainer.classList.add('hidden');
@@ -663,24 +772,23 @@
             try {
                 const response = await fetch(GOOGLE_API_URL);
                 if (!response.ok) throw new Error('Network response error');
-                allProducts = await response.json();
-                applyPowseqSheets(allProducts._powseq); // список листов POWER SEQUENCE из таблицы
-                delete allProducts._powseq;             // служебный ключ — не вкладка с товарами
-                normalizeAllProducts(allProducts); // подхватываем любые названия заголовков
-
-                const sheetNames = Object.keys(allProducts);
-                if (sheetNames.length === 0) throw new Error('No sheets found');
-
-                if (!currentTab || (currentTab !== AMD_SEQ_TAB && !sheetNames.includes(currentTab))) {
-                    currentTab = sheetNames[0];
-                }
+                const raw = await response.json();
                 lastFetchTime = new Date();
-                renderTabs(sheetNames);
-                loader.classList.add('hidden');
-                tableContainer.classList.remove('hidden');
-                executeSearch();
+                // В буфер кладём исходный ответ ДО обработки (следующая
+                // строка сериализует его раньше, чем applyProductsData изменит)
+                writeCache({ products: raw, productsAt: lastFetchTime.getTime() });
+                applyProductsData(raw);
             } catch (error) {
                 console.error('Ошибка загрузки данных:', error);
+                // Сеть недоступна — показываем последний буфер, даже вчерашний
+                const c = readCacheAny();
+                if (c && c.products) {
+                    try {
+                        lastFetchTime = c.productsAt ? new Date(c.productsAt) : null;
+                        applyProductsData(c.products);
+                        return;
+                    } catch (e2) { /* буфер тоже не годится — показываем ошибку */ }
+                }
                 loader.classList.add('hidden');
                 errorMessage.classList.remove('hidden');
             }
@@ -917,9 +1025,7 @@
 
             // Счётчик и время обновления
             resultsCounter.textContent = `Позиций: ${itemCount}`;
-            lastUpdated.textContent = lastFetchTime
-                ? `Обновлено в ${lastFetchTime.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}`
-                : '';
+            lastUpdated.textContent = formatFetchTime(lastFetchTime);
 
             const fragmentTable = document.createDocumentFragment();
             const fragmentCards = document.createDocumentFragment();
@@ -1035,14 +1141,14 @@
         const amdTableBody = document.getElementById('amdTableBody');
         const amdCardsContainer = document.getElementById('amdCardsContainer');
         const amdCounter = document.getElementById('amdCounter');
-        const amdLastUpdated = document.getElementById('amdLastUpdated');
+        const amdBufferStamp = document.getElementById('amdBufferStamp');
         const amdToggleAllBtn = document.getElementById('amdToggleAllBtn');
         const amdToggleAllLabel = document.getElementById('amdToggleAllLabel');
         const inStockLabel = inStockFilter.closest('label');
 
         let amdCurrentGid = AMD_SEQ_SHEETS[0].gid;
         const amdCache = {};               // gid -> разобранные данные листа
-        let amdFetchTime = null;
+        const amdFetchTimes = {};          // gid -> время загрузки листа (метка у кнопки)
         const amdCollapsed = new Set();    // свёрнутые этапы (по умолчанию всё развёрнуто)
         let amdLoading = false;
 
@@ -1165,10 +1271,23 @@
             return `https://docs.google.com/spreadsheets/d/${AMD_SEQ_SHEET_ID}/export?format=csv&gid=${gid}`;
         }
 
-        async function fetchAmdSheet() {
+        async function fetchAmdSheet(force = false) {
             if (amdLoading) return;
-            amdLoading = true;
             const gid = amdCurrentGid;
+
+            // Повторное открытие за день — лист берём из суточного буфера
+            if (!force && !amdCache[gid]) {
+                const saved = (readCacheToday() || {}).powseq;
+                if (saved && saved[gid] && saved[gid].data) {
+                    amdCache[gid] = saved[gid].data;
+                    amdFetchTimes[gid] = saved[gid].at ? new Date(saved[gid].at) : null;
+                    renderPowseqTabs();
+                    if (currentTab === AMD_SEQ_TAB) renderAmdView();
+                    return;
+                }
+            }
+
+            amdLoading = true;
             amdLoader.classList.remove('hidden');
             amdError.classList.add('hidden');
             amdContent.classList.add('hidden');
@@ -1176,14 +1295,27 @@
                 const response = await fetch(amdCsvUrl(gid));
                 if (!response.ok) throw new Error('HTTP ' + response.status);
                 amdCache[gid] = parseAmdSheet(parseCsv(await response.text()));
-                amdFetchTime = new Date();
+                amdFetchTimes[gid] = new Date();
+                const powseq = (readCacheToday() || {}).powseq || {};
+                powseq[gid] = { data: amdCache[gid], at: amdFetchTimes[gid].getTime() };
+                writeCache({ powseq: powseq });
                 amdLoader.classList.add('hidden');
                 renderPowseqTabs(); // счётчик сигналов на кнопке в полосе
                 if (currentTab === AMD_SEQ_TAB) renderAmdView();
             } catch (error) {
                 console.error('Ошибка загрузки последовательности AMD:', error);
-                amdLoader.classList.add('hidden');
-                if (currentTab === AMD_SEQ_TAB) amdError.classList.remove('hidden');
+                // Сеть недоступна — берём последний буфер, даже вчерашний
+                const anySaved = (readCacheAny() || {}).powseq;
+                if (anySaved && anySaved[gid] && anySaved[gid].data) {
+                    amdCache[gid] = anySaved[gid].data;
+                    amdFetchTimes[gid] = anySaved[gid].at ? new Date(anySaved[gid].at) : null;
+                    amdLoader.classList.add('hidden');
+                    renderPowseqTabs();
+                    if (currentTab === AMD_SEQ_TAB) renderAmdView();
+                } else {
+                    amdLoader.classList.add('hidden');
+                    if (currentTab === AMD_SEQ_TAB) amdError.classList.remove('hidden');
+                }
             } finally {
                 amdLoading = false;
             }
@@ -1191,7 +1323,7 @@
 
         async function refreshAmdData() {
             delete amdCache[amdCurrentGid];
-            await fetchAmdSheet();
+            await fetchAmdSheet(true);
         }
 
         function amdStageKey(gid, num) { return gid + '#' + num; }
@@ -1280,9 +1412,7 @@
             amdContent.classList.remove('hidden');
 
             amdCounter.textContent = `Сигналов: ${shown}`;
-            amdLastUpdated.textContent = amdFetchTime
-                ? `Обновлено в ${amdFetchTime.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}`
-                : '';
+            amdBufferStamp.textContent = stampText(amdFetchTimes[amdCurrentGid]);
 
             // «Свернуть/развернуть всё» — только вне поиска
             if (!searchActive) {
@@ -1399,7 +1529,14 @@
             renderAmdView();
         });
 
-        document.getElementById('amdRetryBtn').addEventListener('click', fetchAmdSheet);
+        document.getElementById('amdRetryBtn').addEventListener('click', () => fetchAmdSheet(true));
+
+        // Своя кнопка обновления рубрики — принудительно перечитывает лист
+        document.getElementById('amdRefreshBtn').addEventListener('click', e => {
+            const icon = e.currentTarget.querySelector('i');
+            icon.classList.add('fa-spin');
+            refreshAmdData().finally(() => icon.classList.remove('fa-spin'));
+        });
 
         // --- Обработчики ---
         let searchDebounce = null;
@@ -1421,7 +1558,7 @@
             executeSearch();
         });
 
-        retryBtn.addEventListener('click', fetchProducts);
+        retryBtn.addEventListener('click', () => fetchProducts(true));
 
         // Сворачивание/разворачивание группы по клику на заголовок
         document.addEventListener('click', e => {
@@ -1446,7 +1583,7 @@
         function handleRefresh(btn) {
             const icon = btn.querySelector('i');
             icon.classList.add('fa-spin');
-            const task = currentTab === AMD_SEQ_TAB ? refreshAmdData() : fetchProducts();
+            const task = currentTab === AMD_SEQ_TAB ? refreshAmdData() : fetchProducts(true);
             task.finally(() => icon.classList.remove('fa-spin'));
         }
         document.getElementById('refreshBtn').addEventListener('click', e => handleRefresh(e.currentTarget));
@@ -1550,6 +1687,7 @@
         window.addEventListener('resize', updateHeaderOffset);
 
         updateHeaderOffset();
+        updateBufferStamp();
         renderPowseqTabs();
         fetchProducts();
     </script>
