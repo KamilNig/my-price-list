@@ -735,6 +735,12 @@
         // Разбор ответа бэкенда (или буфера) и отрисовка
         function applyProductsData(raw) {
             allProducts = raw;
+            // Метка времени сборки данных на сервере — честнее момента скачивания
+            if (allProducts._updated) {
+                const d = new Date(allProducts._updated);
+                if (!isNaN(d)) lastFetchTime = d;
+            }
+            delete allProducts._updated;
             applyPowseqSheets(allProducts._powseq); // список листов POWER SEQUENCE из таблицы
             delete allProducts._powseq;             // служебный ключ — не вкладка с товарами
             normalizeAllProducts(allProducts); // подхватываем любые названия заголовков
@@ -752,10 +758,39 @@
             executeSearch();
         }
 
+        // Статическая выгрузка рядом с сайтом (GitHub Pages): Apps Script
+        // по таймеру коммитит data.json в репозиторий — грузится мгновенно.
+        // Пока выгрузка не настроена (файла нет) — работаем по-старому.
+        const STATIC_DATA_URL = 'data.json';
+        const STATIC_DATA_MAX_AGE_MS = 24 * 60 * 60 * 1000; // старше суток — игнорируем
+
+        async function fetchStaticData() {
+            const resp = await fetch(STATIC_DATA_URL, { cache: 'no-cache' });
+            if (!resp.ok) throw new Error('HTTP ' + resp.status);
+            const raw = await resp.json();
+            // Защита от «забытой» выгрузки: если файл давно не обновлялся,
+            // не даём ему заслонить живые данные из Apps Script
+            const upd = raw && raw._updated ? new Date(raw._updated) : null;
+            if (!upd || isNaN(upd) || Date.now() - upd.getTime() > STATIC_DATA_MAX_AGE_MS) {
+                throw new Error('static data stale');
+            }
+            return raw;
+        }
+
         // force=true — принудительная загрузка из таблицы (кнопка «Обновить»);
-        // без force повторные открытия за день берут данные из буфера
+        // без force: сначала мгновенный data.json, затем суточный буфер
         async function fetchProducts(force = false) {
             if (!force) {
+                // 1) Статическая выгрузка на самом сайте — быстрее всего
+                try {
+                    const raw = await fetchStaticData();
+                    lastFetchTime = new Date();
+                    writeCache({ products: raw, productsAt: lastFetchTime.getTime() });
+                    applyProductsData(raw);
+                    return;
+                } catch (e) { /* выгрузки нет или устарела — идём дальше */ }
+
+                // 2) Суточный буфер этого устройства
                 const c = readCacheToday();
                 if (c && c.products) {
                     try {
@@ -770,7 +805,9 @@
             tableContainer.classList.add('hidden');
             noProducts.classList.add('hidden');
             try {
-                const response = await fetch(GOOGLE_API_URL);
+                // Кнопка «Обновить» (force) просит бэкенд собрать данные
+                // заново, минуя серверный кэш; обычная загрузка берёт кэш
+                const response = await fetch(GOOGLE_API_URL + (force ? '?fresh=1' : ''));
                 if (!response.ok) throw new Error('Network response error');
                 const raw = await response.json();
                 lastFetchTime = new Date();
