@@ -695,7 +695,7 @@
         //  Принудительное обновление — только кнопкой «Обновить» 🔄.
         // ============================================================
 
-        const CACHE_KEY = 'srp_cache_v1';
+        const CACHE_KEY = 'srp_cache_v2'; // v2: исправлен разбор моделей POWER SEQUENCE
 
         function cacheDayStr() {
             const d = new Date();
@@ -1253,11 +1253,16 @@
             return rows;
         }
 
-        // Раскладка листа: A — этап, дальше столбцы ищем по заголовкам
-        // 1-й строки; модели плат — во 2-й строке над столбцами потребления.
+        // Раскладка листа: A — этап, столбцы ищем по строке заголовков;
+        // модели плат — в строке над столбцами потребления. Между заголовком
+        // и моделями может стоять строка-название листа (её пропускаем) —
+        // поэтому и заголовок, и строку моделей ищем, а не берём по номеру.
         function parseAmdSheet(rows) {
-            const header = (rows[0] || []).map(h => String(h || '').trim());
-            const modelRow = rows[1] || [];
+            // 1) Строка заголовков столбцов — по словам «Потребление/Описание/Напряжение»
+            let hdrIdx = rows.findIndex(r =>
+                (r || []).some(v => /потребл|описан|напряжен/i.test(String(v || ''))));
+            if (hdrIdx < 0) hdrIdx = 0;
+            const header = (rows[hdrIdx] || []).map(h => String(h || '').trim());
             const colOf = re => header.findIndex(h => re.test(h));
             const col = {
                 name: colOf(/назван|сигнал/i),
@@ -1271,19 +1276,35 @@
             if (col.volt < 0) col.volt = 3;
             if (col.cons < 0) col.cons = 5;
 
+            // 2) Строка с названиями плат — первая после заголовков, где есть
+            //    текст в столбцах потребления, но пустая колонка сигнала.
+            //    Строку-название листа (заполнена только колонка A) пропускаем.
+            const consFilled = r =>
+                (r || []).some((v, c) => c >= col.cons && String(v || '').trim() !== '');
+            let modelIdx = -1;
+            for (let i = hdrIdx + 1; i < rows.length && i <= hdrIdx + 5; i++) {
+                const r = rows[i] || [];
+                const nameEmpty = String(r[col.name] || '').trim() === '';
+                if (nameEmpty && consFilled(r)) { modelIdx = i; break; } // нашли модели
+                if (!nameEmpty) break;                                    // пошли сигналы — моделей нет
+            }
+            const modelRow = modelIdx >= 0 ? (rows[modelIdx] || []) : [];
+
             const models = [];
             for (let c = col.cons; c < Math.max(header.length, modelRow.length); c++) {
                 const name = String(modelRow[c] || '').trim();
                 if (name) models.push({ col: c, name });
             }
 
-            // Примечание к листу — текст во 2-й строке до столбцов потребления
+            // Примечание к листу — текст в строке моделей до столбцов потребления
             const note = modelRow.slice(1, col.cons)
                 .map(v => String(v || '').trim()).filter(Boolean).join('\n');
 
+            // 3) Данные — со строки после моделей (или сразу после заголовка)
+            const dataStart = modelIdx >= 0 ? modelIdx + 1 : hdrIdx + 1;
             const stages = [];
             let stage = null, afterGap = false;
-            for (let i = 2; i < rows.length; i++) {
+            for (let i = dataStart; i < rows.length; i++) {
                 const r = rows[i] || [];
                 const cell = c => c >= 0 ? String(r[c] || '').trim() : '';
                 if (r.every(v => String(v || '').trim() === '')) { afterGap = true; continue; }
