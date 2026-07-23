@@ -25,19 +25,21 @@
         /* Скрытие полосы прокрутки у вкладок (скролл жестом сохраняется) */
         #tabsContainer::-webkit-scrollbar { display: none; }
         #tabsContainer { -ms-overflow-style: none; scrollbar-width: none; }
-        #powseqScroll::-webkit-scrollbar { display: none; }
-        #powseqScroll { -ms-overflow-style: none; scrollbar-width: none; }
+        #powseqScroll::-webkit-scrollbar, #postcodeScroll::-webkit-scrollbar { display: none; }
+        #powseqScroll, #postcodeScroll { -ms-overflow-style: none; scrollbar-width: none; }
 
         /* Вкладки категорий (AMD, Intel...) закреплены: липнут под хедером при прокрутке */
         #tabsBar { position: sticky; top: var(--hdr-h, 64px); z-index: 20; }
 
-        /* В режиме POWER SEQUENCE полоса выбора листов закреплена внизу экрана */
-        #powseqBand.powseq-pinned {
+        /* В режиме рубрики (POWER SEQUENCE / POST CODES) полоса выбора закреплена внизу экрана */
+        #rubricBand.rubric-pinned {
             position: sticky;
             bottom: 0;
             z-index: 20;
             box-shadow: 0 -4px 14px rgba(15, 23, 42, .3);
         }
+        /* Закреплённой полосе пояснение ни к чему — экономим высоту */
+        #rubricBand.rubric-pinned .rubric-note { display: none; }
 
         /* Закреплённая первая строка таблиц: шапка колонок липнет под хедером
            сайта и закреплёнными вкладками. На обёртке таблицы должен быть
@@ -303,6 +305,79 @@
             </div>
         </div>
 
+        <!-- РУБРИКА «POST CODES»: справочник пост кодов из практики ремонта -->
+        <div id="postcodeContainer" class="hidden">
+
+            <!-- Загрузка -->
+            <div id="postcodeLoader" class="hidden flex flex-col items-center justify-center py-20">
+                <div class="animate-spin rounded-full h-10 w-10 border-b-2 border-emerald-600 mb-4"></div>
+                <p class="text-gray-500 text-sm">Загрузка пост кодов...</p>
+            </div>
+
+            <!-- Ошибка загрузки -->
+            <div id="postcodeError" class="hidden bg-red-50 border border-red-200 text-red-800 px-5 py-4 rounded-lg" role="alert">
+                <div class="flex items-start gap-3">
+                    <i class="fa-solid fa-triangle-exclamation text-red-500 mt-0.5"></i>
+                    <div class="flex-1">
+                        <strong class="font-bold block">Не удалось загрузить пост коды</strong>
+                        <span class="text-sm">Проверьте подключение и что таблица пост кодов открыта по ссылке (доступ «Читатель» всем, у кого есть ссылка).</span>
+                    </div>
+                    <button id="postcodeRetryBtn" type="button"
+                        class="shrink-0 px-4 py-2 rounded-lg bg-red-600 text-white text-sm font-semibold hover:bg-red-700 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-red-400">
+                        Повторить
+                    </button>
+                </div>
+            </div>
+
+            <!-- Содержимое рубрики -->
+            <div id="postcodeContent" class="hidden">
+
+                <!-- Заголовок + пояснение -->
+                <div class="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 mb-3">
+                    <h2 class="text-sm font-extrabold text-slate-800 tracking-wide uppercase flex items-center gap-2 shrink-0">
+                        <i class="fa-solid fa-list-ol text-emerald-500"></i>
+                        Post Codes
+                    </h2>
+                    <p class="text-xs text-gray-500 leading-snug">
+                        Пост коды из практики ремонта. Один код — несколько случаев; нажмите на код, чтобы раскрыть.
+                    </p>
+                </div>
+
+                <!-- Строка статуса -->
+                <div class="flex items-center justify-between text-xs text-gray-500 mb-3 px-1 gap-3">
+                    <div class="flex items-center gap-3 min-w-0">
+                        <span id="postcodeCounter"></span>
+                        <button id="postcodeToggleAllBtn" type="button"
+                            class="hidden items-center gap-1.5 bg-emerald-50 border border-emerald-200 text-emerald-700 hover:bg-emerald-100 font-semibold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 rounded-md px-2.5 py-1">
+                            <i class="fa-solid fa-angles-down text-[10px]"></i><span id="postcodeToggleAllLabel">Развернуть всё</span>
+                        </button>
+                    </div>
+                    <!-- Время буфера + кнопка обновления рубрики -->
+                    <div class="flex items-center gap-2 shrink-0" title="Когда пост коды загружены из таблицы">
+                        <div class="flex flex-col items-end leading-tight text-right select-none">
+                            <span class="text-[9px] uppercase tracking-wide text-gray-400">Обновлено</span>
+                            <span id="postcodeBufferStamp" class="text-[11px] font-semibold text-gray-600 font-mono"></span>
+                        </div>
+                        <button id="postcodeRefreshBtn" type="button" title="Обновить пост коды из таблицы"
+                            class="flex items-center justify-center w-8 h-8 rounded-lg bg-white border border-gray-300 text-gray-500 hover:text-gray-800 hover:bg-gray-100 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400">
+                            <i class="fa-solid fa-rotate text-sm"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- ВЕРСИЯ ДЛЯ ДЕСКТОПОВ (таблица) -->
+                <div class="tbl-sticky hidden md:block bg-white rounded-xl shadow-sm overflow-clip border border-gray-200">
+                    <table class="min-w-full divide-y divide-gray-200 text-left text-sm">
+                        <thead id="postcodeTableHead" class="bg-gray-50 text-xs text-gray-500 uppercase font-semibold tracking-wide"></thead>
+                        <tbody id="postcodeTableBody" class="divide-y divide-gray-100 bg-white"></tbody>
+                    </table>
+                </div>
+
+                <!-- ВЕРСИЯ ДЛЯ МОБИЛЬНЫХ (карточки) -->
+                <div id="postcodeCardsContainer" class="block md:hidden space-y-3"></div>
+            </div>
+        </div>
+
         <!-- Ничего не найдено -->
         <div id="noProducts" class="hidden text-center py-20">
             <i class="fa-regular fa-folder-open text-3xl text-gray-300 mb-3 block"></i>
@@ -314,12 +389,13 @@
         </div>
     </main>
 
-    <!-- Рубрика POWER SEQUENCE — отдельная секция внизу, отделена от запчастей
-         на продажу. В режиме рубрики закрепляется внизу экрана (powseq-pinned) -->
-    <section id="powseqBand" class="bg-slate-900 mt-8">
-        <div class="max-w-7xl mx-auto px-4 py-5">
-            <div class="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4">
-                <span class="flex items-center gap-2 text-sm font-extrabold tracking-widest text-amber-400 uppercase shrink-0 select-none">
+    <!-- Полоса справочников (POWER SEQUENCE + POST CODES) — отдельно от запчастей
+         на продажу. В режиме рубрики закрепляется внизу экрана (rubric-pinned) -->
+    <section id="rubricBand" class="bg-slate-900 mt-8">
+        <div class="max-w-7xl mx-auto px-4 py-4 space-y-2.5">
+            <!-- POWER SEQUENCE -->
+            <div class="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
+                <span class="flex items-center gap-2 text-sm font-extrabold tracking-widest text-amber-400 uppercase shrink-0 select-none w-40">
                     <i class="fa-solid fa-bolt"></i> Power Sequence
                 </span>
                 <div id="powseqScroll" class="flex items-center gap-2 overflow-x-auto whitespace-nowrap flex-1">
@@ -328,7 +404,18 @@
                     </div>
                 </div>
             </div>
-            <p class="text-xs text-slate-500 mt-2.5">Последовательность запуска ноутбука — отдельно от запчастей на продажу.</p>
+            <!-- POST CODES -->
+            <div class="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
+                <span class="flex items-center gap-2 text-sm font-extrabold tracking-widest text-emerald-400 uppercase shrink-0 select-none w-40">
+                    <i class="fa-solid fa-list-ol"></i> Post Codes
+                </span>
+                <div id="postcodeScroll" class="flex items-center gap-2 overflow-x-auto whitespace-nowrap flex-1">
+                    <div id="postcodeTabs" class="flex gap-2">
+                        <!-- Кнопка справочника пост кодов генерируется динамически -->
+                    </div>
+                </div>
+            </div>
+            <p class="rubric-note text-xs text-slate-500 pt-0.5">Справочники по ремонту — отдельно от запчастей на продажу.</p>
         </div>
     </section>
 
@@ -873,9 +960,10 @@
                 tabsContainer.appendChild(button);
             });
 
-            // Полоса POWER SEQUENCE живёт отдельно, но её активность
+            // Полосы справочников живут отдельно, но их активность
             // зависит от текущей вкладки — обновляем вместе
             renderPowseqTabs();
+            renderPostcodeTabs();
             updateHeaderOffset(); // высота вкладок могла измениться
         }
 
@@ -901,6 +989,13 @@
             if (currentTab === AMD_SEQ_TAB) {
                 searchSummaryContainer.classList.add('hidden');
                 renderAmdView();
+                return;
+            }
+
+            // Рубрика «Post Codes» ищет только внутри своего справочника
+            if (currentTab === POSTCODE_TAB) {
+                searchSummaryContainer.classList.add('hidden');
+                renderPostcodeView();
                 return;
             }
 
@@ -986,7 +1081,8 @@
             mobileCardsContainer.innerHTML = '';
             photoGroups = [];
             amdSeqContainer.classList.add('hidden');
-            setAmdUiState(false);
+            postcodeContainer.classList.add('hidden');
+            setRubricMode('products');
 
             const searchVal = searchInput.value.toLowerCase().trim();
             const searchActive = searchVal !== '';
@@ -1216,14 +1312,17 @@
             if (!clean.some(s => s.gid === amdCurrentGid)) amdCurrentGid = clean[0].gid;
         }
 
-        // В рубрике фильтр «Только в наличии» не имеет смысла — прячем;
-        // полоса выбора листов POWER SEQUENCE закрепляется внизу экрана
-        function setAmdUiState(isAmd) {
-            inStockLabel.style.display = isAmd ? 'none' : '';
-            document.getElementById('powseqBand').classList.toggle('powseq-pinned', isAmd);
-            searchInput.placeholder = isAmd
-                ? 'Поиск по сигналу или описанию...'
-                : 'Поиск по названию или магазину...';
+        // Режим отображения: 'products' | 'amd' | 'postcode'.
+        // В рубриках фильтр «Только в наличии» не нужен, плейсхолдер свой,
+        // а полоса справочников закрепляется внизу экрана.
+        function setRubricMode(mode) {
+            const isRubric = mode === 'amd' || mode === 'postcode';
+            inStockLabel.style.display = isRubric ? 'none' : '';
+            document.getElementById('rubricBand').classList.toggle('rubric-pinned', isRubric);
+            searchInput.placeholder =
+                mode === 'amd'      ? 'Поиск по сигналу или описанию...' :
+                mode === 'postcode' ? 'Поиск по коду, плате, неисправности...' :
+                                      'Поиск по названию или магазину...';
         }
 
         // Разбор CSV: кавычки, запятые и переносы строк внутри ячеек
@@ -1412,7 +1511,7 @@
 
         // Точка входа рубрики: прячет товары, показывает контейнер и данные
         function renderAmdView() {
-            setAmdUiState(true);
+            setRubricMode('amd');
             tableContainer.classList.add('hidden');
             noProducts.classList.add('hidden');
             errorMessage.classList.add('hidden');
@@ -1420,6 +1519,7 @@
             loader.classList.add('hidden');
             amdSeqContainer.classList.remove('hidden');
 
+            postcodeContainer.classList.add('hidden');
             const data = amdCache[amdCurrentGid];
             if (!data) { fetchAmdSheet(); return; }
             amdLoader.classList.add('hidden');
@@ -1612,6 +1712,326 @@
             refreshAmdData().finally(() => icon.classList.remove('fa-spin'));
         });
 
+        // ============================================================
+        //  РУБРИКА «POST CODES» — справочник пост кодов из практики
+        //  ремонта. Грузится напрямую из отдельной Google Таблицы (CSV),
+        //  как и POWER SEQUENCE. Таблица должна быть открыта по ссылке.
+        //  Столбцы: POST CODE | Platform | CPU/GPU | Неисправность | Решение.
+        //  Строки сгруппированы по коду (один код — несколько случаев).
+        // ============================================================
+
+        const POSTCODE_SHEET_ID = '1771ShCl8J2DaqFPQ37EIJvP2tsCd4ZJnvPizwDoVD98';
+        const POSTCODE_GID = 0;
+        const POSTCODE_TAB = '__postcode__'; // служебный id вкладки
+
+        const postcodeContainer = document.getElementById('postcodeContainer');
+        const postcodeLoader = document.getElementById('postcodeLoader');
+        const postcodeError = document.getElementById('postcodeError');
+        const postcodeContent = document.getElementById('postcodeContent');
+        const postcodeTabs = document.getElementById('postcodeTabs');
+        const postcodeTableHead = document.getElementById('postcodeTableHead');
+        const postcodeTableBody = document.getElementById('postcodeTableBody');
+        const postcodeCardsContainer = document.getElementById('postcodeCardsContainer');
+        const postcodeCounter = document.getElementById('postcodeCounter');
+        const postcodeBufferStamp = document.getElementById('postcodeBufferStamp');
+        const postcodeToggleAllBtn = document.getElementById('postcodeToggleAllBtn');
+        const postcodeToggleAllLabel = document.getElementById('postcodeToggleAllLabel');
+
+        let postcodeData = null;
+        let postcodeFetchTime = null;
+        let postcodeLoading = false;
+        const postcodeExpanded = new Set(); // раскрытые коды (по умолчанию всё свёрнуто)
+
+        // Разбор листа: столбцы ищем по заголовкам, строки группируем по коду
+        function parsePostcodes(rows) {
+            let hdrIdx = rows.findIndex(r =>
+                (r || []).some(v => /post\s*code|пост\s*код/i.test(String(v || ''))));
+            if (hdrIdx < 0) hdrIdx = 0;
+            const header = (rows[hdrIdx] || []).map(h => String(h || '').trim());
+            const colOf = re => header.findIndex(h => re.test(h));
+            const col = {
+                code:     colOf(/post|код/i),
+                platform: colOf(/platform|плат/i),
+                chip:     colOf(/cpu|gpu|чип/i),
+                fault:    colOf(/неиспр|fault|проблем/i),
+                fix:      colOf(/решен|fix|устран/i)
+            };
+            if (col.code < 0)     col.code = 0;
+            if (col.platform < 0) col.platform = 1;
+            if (col.chip < 0)     col.chip = 2;
+            if (col.fault < 0)    col.fault = 3;
+            if (col.fix < 0)      col.fix = 4;
+
+            const clean = v => { v = String(v || '').trim(); return v === '—' ? '' : v; };
+            const groups = [];
+            let cur = null;
+            for (let i = hdrIdx + 1; i < rows.length; i++) {
+                const r = rows[i] || [];
+                if (r.every(v => String(v || '').trim() === '')) continue;
+                const cell = c => c >= 0 ? String(r[c] || '').trim() : '';
+                const code = cell(col.code);
+                const item = {
+                    platform: cell(col.platform),
+                    chip:     clean(cell(col.chip)),
+                    fault:    cell(col.fault),
+                    fix:      cell(col.fix)
+                };
+                if (!code && !item.platform && !item.fault && !item.fix) continue;
+                // Новый код (или первая строка) открывает группу; пустой код —
+                // продолжение предыдущего кода
+                if (!cur || (code && code !== cur.code)) {
+                    cur = { code: code || (cur ? cur.code : '—'), cases: [] };
+                    groups.push(cur);
+                }
+                cur.cases.push(item);
+            }
+            groups.forEach((g, i) => { g.id = i; });
+            return {
+                groups,
+                totalCases: groups.reduce((n, g) => n + g.cases.length, 0),
+                hasChip: groups.some(g => g.cases.some(c => c.chip))
+            };
+        }
+
+        function postcodeCsvUrl() {
+            return `https://docs.google.com/spreadsheets/d/${POSTCODE_SHEET_ID}/export?format=csv&gid=${POSTCODE_GID}`;
+        }
+
+        async function fetchPostcodes(force = false) {
+            if (postcodeLoading) return;
+
+            // Повторное открытие за день — из суточного буфера
+            if (!force && !postcodeData) {
+                const saved = (readCacheToday() || {}).postcode;
+                if (saved && saved.data) {
+                    postcodeData = saved.data;
+                    postcodeFetchTime = saved.at ? new Date(saved.at) : null;
+                    renderPostcodeTabs();
+                    if (currentTab === POSTCODE_TAB) renderPostcodeView();
+                    return;
+                }
+            }
+
+            postcodeLoading = true;
+            postcodeLoader.classList.remove('hidden');
+            postcodeError.classList.add('hidden');
+            postcodeContent.classList.add('hidden');
+            try {
+                const resp = await fetch(postcodeCsvUrl());
+                if (!resp.ok) throw new Error('HTTP ' + resp.status);
+                postcodeData = parsePostcodes(parseCsv(await resp.text()));
+                postcodeFetchTime = new Date();
+                writeCache({ postcode: { data: postcodeData, at: postcodeFetchTime.getTime() } });
+                postcodeLoader.classList.add('hidden');
+                renderPostcodeTabs();
+                if (currentTab === POSTCODE_TAB) renderPostcodeView();
+            } catch (error) {
+                console.error('Ошибка загрузки пост кодов:', error);
+                const any = (readCacheAny() || {}).postcode;
+                if (any && any.data) {
+                    postcodeData = any.data;
+                    postcodeFetchTime = any.at ? new Date(any.at) : null;
+                    postcodeLoader.classList.add('hidden');
+                    renderPostcodeTabs();
+                    if (currentTab === POSTCODE_TAB) renderPostcodeView();
+                } else {
+                    postcodeLoader.classList.add('hidden');
+                    if (currentTab === POSTCODE_TAB) postcodeError.classList.remove('hidden');
+                }
+            } finally {
+                postcodeLoading = false;
+            }
+        }
+
+        async function refreshPostcodes() {
+            postcodeData = null;
+            await fetchPostcodes(true);
+        }
+
+        function postcodeGroupMatches(g, q) {
+            if (g.code.toLowerCase().includes(q)) return true;
+            return g.cases.some(c => postcodeCaseMatches(c, q));
+        }
+        function postcodeCaseMatches(c, q) {
+            return c.platform.toLowerCase().includes(q)
+                || c.chip.toLowerCase().includes(q)
+                || c.fault.toLowerCase().includes(q)
+                || c.fix.toLowerCase().includes(q);
+        }
+
+        // Кнопка справочника в полосе POST CODES
+        function renderPostcodeTabs() {
+            postcodeTabs.innerHTML = '';
+            const isActive = currentTab === POSTCODE_TAB;
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = `flex items-center gap-1.5 px-3.5 py-1.5 rounded-md text-xs font-bold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 shrink-0 ${
+                isActive
+                ? 'bg-emerald-400 text-slate-900'
+                : 'bg-slate-800 text-slate-300 border border-slate-700 hover:bg-slate-700 hover:text-white'
+            }`;
+            btn.innerHTML = 'Справочник пост кодов' +
+                (postcodeData ? ` <span class="text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${isActive ? 'bg-slate-900/15' : 'bg-white/10'}">${postcodeData.totalCases}</span>` : '');
+            btn.addEventListener('click', () => {
+                currentTab = POSTCODE_TAB;
+                renderTabs(Object.keys(allProducts));
+                executeSearch();
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+            });
+            postcodeTabs.appendChild(btn);
+        }
+
+        // Точка входа рубрики: прячет товары и другую рубрику, показывает пост коды
+        function renderPostcodeView() {
+            setRubricMode('postcode');
+            tableContainer.classList.add('hidden');
+            noProducts.classList.add('hidden');
+            errorMessage.classList.add('hidden');
+            searchSummaryContainer.classList.add('hidden');
+            loader.classList.add('hidden');
+            amdSeqContainer.classList.add('hidden');
+            postcodeContainer.classList.remove('hidden');
+
+            if (!postcodeData) { fetchPostcodes(); return; }
+            postcodeLoader.classList.add('hidden');
+            postcodeError.classList.add('hidden');
+            renderPostcodeList(postcodeData);
+        }
+
+        function renderPostcodeList(data) {
+            const searchVal = searchInput.value.toLowerCase().trim();
+            const searchActive = searchVal !== '';
+
+            // Группа подходит целиком (по коду) либо отдельными случаями
+            const visibleGroups = [];
+            let shown = 0;
+            data.groups.forEach(g => {
+                let cases = g.cases;
+                if (searchActive && !g.code.toLowerCase().includes(searchVal)) {
+                    cases = g.cases.filter(c => postcodeCaseMatches(c, searchVal));
+                    if (!cases.length) return;
+                }
+                shown += cases.length;
+                visibleGroups.push({ ...g, cases });
+            });
+
+            if (!visibleGroups.length) {
+                postcodeContent.classList.add('hidden');
+                noProducts.classList.remove('hidden');
+                return;
+            }
+            noProducts.classList.add('hidden');
+            postcodeContent.classList.remove('hidden');
+
+            postcodeCounter.textContent = `Случаев: ${shown} · кодов: ${visibleGroups.length}`;
+            postcodeBufferStamp.textContent = stampText(postcodeFetchTime);
+
+            // «Развернуть/свернуть всё» — только вне поиска
+            if (!searchActive) {
+                const allExpanded = data.groups.every(g => postcodeExpanded.has(g.id));
+                postcodeToggleAllBtn.classList.remove('hidden');
+                postcodeToggleAllBtn.classList.add('inline-flex');
+                postcodeToggleAllLabel.textContent = allExpanded ? 'Свернуть всё' : 'Развернуть всё';
+                postcodeToggleAllBtn.querySelector('i').className = `fa-solid ${allExpanded ? 'fa-angles-up' : 'fa-angles-down'} text-[10px]`;
+            } else {
+                postcodeToggleAllBtn.classList.add('hidden');
+                postcodeToggleAllBtn.classList.remove('inline-flex');
+            }
+
+            const colCount = 3 + (data.hasChip ? 1 : 0);
+            postcodeTableHead.innerHTML = `
+                <tr>
+                    <th scope="col" class="px-6 py-4">Платформа</th>
+                    ${data.hasChip ? '<th scope="col" class="px-6 py-4">CPU / GPU</th>' : ''}
+                    <th scope="col" class="px-6 py-4">Неисправность</th>
+                    <th scope="col" class="px-6 py-4">Решение</th>
+                </tr>`;
+
+            const hl = t => highlightMatch(t, searchVal);
+            let tableHtml = '';
+            let cardsHtml = '';
+
+            visibleGroups.forEach(g => {
+                const expanded = searchActive || postcodeExpanded.has(g.id);
+                const interactive = !searchActive;
+
+                const headerInner = `
+                    <span class="font-mono font-extrabold text-sm md:text-base bg-white/15 rounded px-2 py-0.5">${hl(g.code)}</span>
+                    <span class="text-[11px] uppercase tracking-wide text-emerald-200/90 hidden sm:inline">пост код</span>
+                    <span class="ml-auto flex items-center gap-3 shrink-0">
+                        <span class="text-[11px] font-semibold bg-white/15 px-2 py-0.5 rounded-full">${g.cases.length}</span>
+                        ${interactive ? '<i class="fa-solid fa-chevron-down grp-chevron text-xs"></i>' : ''}
+                    </span>`;
+
+                tableHtml += `
+                    <tr><td colspan="${colCount}" class="p-0 select-none">
+                        <button type="button" ${interactive ? `data-postcode-toggle="${g.id}"` : 'tabindex="-1"'} aria-expanded="${expanded}"
+                            class="grp-header ${expanded ? '' : 'grp-collapsed'} w-full flex items-center gap-2.5 px-6 py-2.5 bg-emerald-700 ${interactive ? 'hover:bg-emerald-800 cursor-pointer' : 'cursor-default'} text-white text-left transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-white/70">
+                            ${headerInner}
+                        </button>
+                    </td></tr>`;
+
+                cardsHtml += `
+                    <div class="select-none mt-2">
+                        <button type="button" ${interactive ? `data-postcode-toggle="${g.id}"` : 'tabindex="-1"'} aria-expanded="${expanded}"
+                            class="grp-header ${expanded ? '' : 'grp-collapsed'} w-full flex items-center gap-2.5 px-4 py-2.5 rounded-lg bg-emerald-700 ${interactive ? 'active:bg-emerald-800 cursor-pointer' : ''} text-white text-left shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-white/70">
+                            ${headerInner}
+                        </button>
+                    </div>`;
+
+                if (!expanded) return;
+
+                g.cases.forEach(c => {
+                    tableHtml += `
+                        <tr class="hover:bg-emerald-50/40 transition-colors align-top">
+                            <td class="px-6 py-3.5 font-semibold text-gray-900 max-w-[220px] break-words">${hl(c.platform) || '—'}</td>
+                            ${data.hasChip ? `<td class="px-6 py-3.5 text-xs text-gray-600 font-mono">${hl(c.chip) || '—'}</td>` : ''}
+                            <td class="px-6 py-3.5 text-xs text-gray-600 whitespace-pre-line leading-snug max-w-md">${hl(c.fault) || '—'}</td>
+                            <td class="px-6 py-3.5 text-xs whitespace-pre-line leading-snug max-w-md"><span class="border-l-2 border-emerald-400 pl-2 text-gray-800 inline-block">${hl(c.fix) || '—'}</span></td>
+                        </tr>`;
+
+                    cardsHtml += `
+                        <div class="bg-white rounded-xl p-4 border border-gray-200 shadow-sm">
+                            <div class="flex items-center gap-2 flex-wrap">
+                                <span class="font-semibold text-gray-900 text-sm">${hl(c.platform) || '—'}</span>
+                                ${c.chip ? `<span class="font-mono text-[11px] text-gray-500 bg-gray-100 border border-gray-200 rounded px-1.5 py-0.5">${hl(c.chip)}</span>` : ''}
+                            </div>
+                            ${c.fault ? `<div class="text-xs text-gray-600 mt-2 whitespace-pre-line leading-snug"><span class="text-gray-400 uppercase text-[10px] tracking-wide font-semibold">Неисправность:</span> ${hl(c.fault)}</div>` : ''}
+                            ${c.fix ? `<div class="text-xs text-gray-800 mt-2 whitespace-pre-line leading-snug border-l-2 border-emerald-400 pl-2"><span class="text-emerald-600 uppercase text-[10px] tracking-wide font-semibold">Решение:</span> ${hl(c.fix)}</div>` : ''}
+                        </div>`;
+                });
+            });
+
+            postcodeTableBody.innerHTML = tableHtml;
+            postcodeCardsContainer.innerHTML = cardsHtml;
+        }
+
+        // Раскрытие/сворачивание группы пост кода
+        document.addEventListener('click', e => {
+            const btn = e.target.closest('[data-postcode-toggle]');
+            if (!btn) return;
+            const id = Number(btn.dataset.postcodeToggle);
+            if (postcodeExpanded.has(id)) postcodeExpanded.delete(id);
+            else postcodeExpanded.add(id);
+            renderPostcodeView();
+        });
+
+        postcodeToggleAllBtn.addEventListener('click', () => {
+            if (!postcodeData) return;
+            const ids = postcodeData.groups.map(g => g.id);
+            const allExpanded = ids.every(id => postcodeExpanded.has(id));
+            if (allExpanded) ids.forEach(id => postcodeExpanded.delete(id));
+            else ids.forEach(id => postcodeExpanded.add(id));
+            renderPostcodeView();
+        });
+
+        document.getElementById('postcodeRetryBtn').addEventListener('click', () => fetchPostcodes(true));
+        document.getElementById('postcodeRefreshBtn').addEventListener('click', e => {
+            const icon = e.currentTarget.querySelector('i');
+            icon.classList.add('fa-spin');
+            refreshPostcodes().finally(() => icon.classList.remove('fa-spin'));
+        });
+
         // --- Обработчики ---
         let searchDebounce = null;
         searchInput.addEventListener('input', () => {
@@ -1657,7 +2077,9 @@
         function handleRefresh(btn) {
             const icon = btn.querySelector('i');
             icon.classList.add('fa-spin');
-            const task = currentTab === AMD_SEQ_TAB ? refreshAmdData() : fetchProducts(true);
+            const task = currentTab === AMD_SEQ_TAB ? refreshAmdData()
+                : currentTab === POSTCODE_TAB ? refreshPostcodes()
+                : fetchProducts(true);
             task.finally(() => icon.classList.remove('fa-spin'));
         }
         document.getElementById('refreshBtn').addEventListener('click', e => handleRefresh(e.currentTarget));
@@ -1769,9 +2191,18 @@
         window.addEventListener('load', updateHeaderOffset);
         if (document.fonts && document.fonts.ready) document.fonts.ready.then(updateHeaderOffset);
 
+        // Гидратация пост кодов из суточного буфера — счётчик и мгновенное
+        // открытие без сети, если сегодня уже загружали
+        const _pcCache = (readCacheToday() || {}).postcode;
+        if (_pcCache && _pcCache.data) {
+            postcodeData = _pcCache.data;
+            postcodeFetchTime = _pcCache.at ? new Date(_pcCache.at) : null;
+        }
+
         updateHeaderOffset();
         updateBufferStamp();
         renderPowseqTabs();
+        renderPostcodeTabs();
         fetchProducts();
     </script>
 </body>
