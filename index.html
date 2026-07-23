@@ -101,6 +101,14 @@
 </head>
 <body class="bg-gray-50 text-gray-800 min-h-screen font-sans flex flex-col">
 
+    <!-- SAFELIST: классы рубрик (заголовки этапов/кодов) вставляются динамически,
+         поэтому Tailwind CDN должен «увидеть» их при загрузке — иначе правило
+         сгенерируется позже вставки и к элементу не применится (фон был бы прозрачным). -->
+    <div class="hidden" aria-hidden="true">
+        <span class="bg-amber-400 hover:bg-amber-500 active:bg-amber-500 text-slate-900 text-amber-700 bg-slate-900/15 focus-visible:ring-amber-700"></span>
+        <span class="bg-emerald-700 hover:bg-emerald-800 active:bg-emerald-800 text-emerald-200/90 bg-emerald-400 border-emerald-400 text-emerald-600 hover:bg-emerald-50/40 focus-visible:ring-emerald-400"></span>
+    </div>
+
     <!-- Хедер (закреплён, чтобы поиск был всегда под рукой) -->
     <header class="bg-slate-900 text-white shadow-md sticky top-0 z-30">
         <div class="max-w-7xl mx-auto px-4 py-3 md:py-4 flex flex-col md:flex-row justify-between items-stretch md:items-center gap-3 md:gap-4">
@@ -1621,17 +1629,17 @@
                 const interactive = !searchActive;
 
                 const headerInner = `
-                    <i class="fa-solid fa-layer-group text-indigo-200 text-sm"></i>
+                    <i class="fa-solid fa-layer-group text-amber-700 text-sm"></i>
                     <span class="font-bold text-xs md:text-sm uppercase tracking-wide">${st.num}. ${hl(st.title || 'Прочее')}</span>
                     <span class="ml-auto flex items-center gap-3 shrink-0">
-                        <span class="text-[11px] font-semibold bg-white/15 px-2 py-0.5 rounded-full">${st.signals.length}</span>
+                        <span class="text-[11px] font-semibold bg-slate-900/15 px-2 py-0.5 rounded-full">${st.signals.length}</span>
                         ${interactive ? '<i class="fa-solid fa-chevron-down grp-chevron text-xs"></i>' : ''}
                     </span>`;
 
                 tableHtml += `
                     <tr><td colspan="${colCount}" class="p-0 select-none">
                         <button type="button" ${interactive ? `data-amd-toggle="${escapeHtml(key)}"` : 'tabindex="-1"'} aria-expanded="${!collapsed}"
-                            class="grp-header ${collapsed ? 'grp-collapsed' : ''} w-full flex items-center gap-2.5 px-6 py-2.5 bg-indigo-600 ${interactive ? 'hover:bg-indigo-700 cursor-pointer' : 'cursor-default'} text-white text-left transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-white/70">
+                            class="grp-header ${collapsed ? 'grp-collapsed' : ''} w-full flex items-center gap-2.5 px-6 py-2.5 bg-amber-400 ${interactive ? 'hover:bg-amber-500 cursor-pointer' : 'cursor-default'} text-slate-900 text-left transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-amber-700">
                             ${headerInner}
                         </button>
                     </td></tr>`;
@@ -1639,7 +1647,7 @@
                 cardsHtml += `
                     <div class="select-none mt-2">
                         <button type="button" ${interactive ? `data-amd-toggle="${escapeHtml(key)}"` : 'tabindex="-1"'} aria-expanded="${!collapsed}"
-                            class="grp-header ${collapsed ? 'grp-collapsed' : ''} w-full flex items-center gap-2.5 px-4 py-2.5 rounded-lg bg-indigo-600 ${interactive ? 'active:bg-indigo-700 cursor-pointer' : ''} text-white text-left shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-white/70">
+                            class="grp-header ${collapsed ? 'grp-collapsed' : ''} w-full flex items-center gap-2.5 px-4 py-2.5 rounded-lg bg-amber-400 ${interactive ? 'active:bg-amber-500 cursor-pointer' : ''} text-slate-900 text-left shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-700">
                             ${headerInner}
                         </button>
                     </div>`;
